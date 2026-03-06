@@ -32,9 +32,9 @@ INSTALLED_APPS = [
     'rentals',  # تطبيق إدارة الإيجارات
 ]
 CLOUDINARY_STORAGE = {
-    'CLOUD_NAME': dzsipctqe,
-    'API_KEY': 484654375992933,
-    'API_SECRET': 0yNVYUP89D-YzYtX1kzgljM7N9E
+    'CLOUD_NAME': 'dzsipctqe',
+    'API_KEY': '484654375992933',
+    'API_SECRET': '0yNVYUP89D-YzYtX1kzgljM7N9E'
 }
 
 # استخدم Cloudinary لتخزين الملفات المرفوعة
