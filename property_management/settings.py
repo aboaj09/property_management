@@ -5,7 +5,7 @@ Django settings for property_management project.
 import os
 import dj_database_url
 from pathlib import Path
-from django.utils.translation import gettext_lazy as ـ
+from django.utils.translation import gettext_lazy as _
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
