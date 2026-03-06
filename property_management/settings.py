@@ -5,14 +5,18 @@ Django settings for property_management project.
 from pathlib import Path
 from django.utils.translation import gettext_lazy as _
 import os
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Quick-start development settings - unsuitable for production
-SECRET_KEY = 'django-insecure-your-secret-key-here-change-it'
+SECRET_KEY = 'Ford@2015'
 DEBUG = True
-ALLOWED_HOSTS = ['*', '.railway.app']
+ALLOWED_HOSTS = [
+    'hearty-reflection-production-6d55.up.railway.app',
+    '.railway.app',  # يسمح بجميع النطاقات الفرعية لـ railway.app
+]
 
 # Application definition
 INSTALLED_APPS = [
@@ -57,12 +61,17 @@ TEMPLATES = [
 WSGI_APPLICATION = 'property_management.wsgi.application'
 
 # Database
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+if os.getenv('DATABASE_URL'):
+    DATABASES = {
+        'default': dj_database_url.config(default=os.getenv('DATABASE_URL'))
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -127,3 +136,7 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+DEBUG = False
+CSRF_TRUSTED_ORIGINS = [
+    'https://hearty-reflection-production-6d55.up.railway.app',
+]
