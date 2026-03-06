@@ -5,7 +5,10 @@ Django settings for property_management project.
 import os
 import dj_database_url
 from pathlib import Path
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy as ـ
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -24,8 +27,18 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'cloudinary_storage',
+    'cloudinary',
     'rentals',  # تطبيق إدارة الإيجارات
 ]
+CLOUDINARY_STORAGE = {
+    'CLOUD_NAME': dzsipctqe,
+    'API_KEY': 484654375992933,
+    'API_SECRET': 0yNVYUP89D-YzYtX1kzgljM7N9E
+}
+
+# استخدم Cloudinary لتخزين الملفات المرفوعة
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
