@@ -1,0 +1,60 @@
+{% extends 'rentals/base.html' %}
+{% load i18n %}
+
+{% block title %}{% trans "إضافة مصروف" %}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow">
+            <div class="card-header bg-danger text-white">
+                <h4 class="mb-0">{% trans "إضافة مصروف" %} - {{ subcategory.name }}</h4>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    {% for field in form %}
+                        <div class="mb-3">
+                            <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                            {% if field.errors %}
+                                <div class="alert alert-danger py-1">{{ field.errors }}</div>
+                            {% endif %}
+                            {{ field }}
+                            {% if field.help_text %}
+                                <div class="form-text">{{ field.help_text }}</div>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                    
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-check-circle"></i> {% trans "حفظ المصروف" %}
+                        </button>
+                        <a href="{% url 'subcategory_detail' subcategory.id %}" class="btn btn-outline-secondary">
+                            {% trans "إلغاء" %}
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var hasTaxCheckbox = document.getElementById('id_has_tax');
+        if (hasTaxCheckbox) {
+            var taxRateField = document.getElementById('id_tax_rate').parentNode;
+            var taxRefundableField = document.getElementById('id_tax_refundable').parentNode;
+            function toggleTaxFields() {
+                var display = hasTaxCheckbox.checked ? 'block' : 'none';
+                taxRateField.style.display = display;
+                taxRefundableField.style.display = display;
+            }
+            toggleTaxFields();
+            hasTaxCheckbox.addEventListener('change', toggleTaxFields);
+        }
+    });
+</script>
+{% endblock %}

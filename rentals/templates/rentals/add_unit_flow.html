@@ -1,0 +1,42 @@
+{% extends 'rentals/base.html' %}
+{% load i18n %}
+
+{% block title %}{% trans "إضافة وحدة - اختيار الفئة" %}{% endblock %}
+
+{% block content %}
+<h2 class="mb-3">{% trans "إضافة وحدة جديدة" %}</h2>
+<p class="lead">{% trans "اختر فئة رئيسية:" %}</p>
+
+<div class="row g-3">
+    {% for category in categories %}
+    <div class="col-md-4">
+        <a href="{% url 'choose_subcategory' category.id %}" class="text-decoration-none">
+            <div class="card h-100 border-primary hover-shadow">
+                <div class="card-body text-center">
+                    <i class="bi bi-folder display-4 text-primary"></i>
+                    <h5 class="card-title mt-2">{{ category.name }}</h5>
+                    <p class="card-text text-muted">{{ category.subcategories.count }} {% trans "قسم" %}</p>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% empty %}
+    <div class="col-12">
+        <div class="alert alert-info text-center">
+            {% trans "لا توجد فئات رئيسية بعد." %}
+        </div>
+    </div>
+    {% endfor %}
+    <div class="col-md-4">
+        <a href="{% url 'add_main_category' %}" class="text-decoration-none">
+            <div class="card h-100 border-success hover-shadow">
+                <div class="card-body text-center">
+                    <i class="bi bi-plus-circle display-4 text-success"></i>
+                    <h5 class="card-title mt-2">{% trans "إضافة فئة جديدة" %}</h5>
+                    <p class="card-text text-muted">{% trans "إنشاء فئة رئيسية جديدة" %}</p>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+{% endblock %}

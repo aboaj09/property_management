@@ -1,0 +1,201 @@
+{% extends 'rentals/base.html' %}
+{% load i18n %}
+
+{% block title %}{{ subcategory.name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>{{ subcategory.name }}</h2>
+    <div>
+        <a href="{% url 'edit_sub_category' subcategory.id %}" class="btn btn-warning btn-sm">
+            <i class="bi bi-pencil"></i> {% trans "تعديل" %}
+        </a>
+        <a href="{% url 'delete_sub_category' subcategory.id %}" class="btn btn-danger btn-sm">
+            <i class="bi bi-trash"></i> {% trans "حذف" %}
+        </a>
+        <a href="{% url 'main_category_detail' subcategory.main_category.id %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-right"></i> {% trans "عودة" %}
+        </a>
+    </div>
+</div>
+
+<p class="text-muted">
+    <i class="bi bi-geo-alt"></i> {{ subcategory.location|default:_("الموقع غير محدد") }}<br>
+    <i class="bi bi-tag"></i> {% trans "الفئة الرئيسية:" %} <a href="{% url 'main_category_detail' subcategory.main_category.id %}">{{ subcategory.main_category.name }}</a>
+</p>
+
+<!-- إحصائيات سريعة -->
+<div class="row g-2 mb-4">
+    <div class="col-md-3 col-6">
+        <div class="card text-white bg-info h-100">
+            <div class="card-body text-center">
+                <h4>{{ units|length }}</h4>
+                <p class="mb-0">{% trans "إجمالي الوحدات" %}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card text-white bg-success h-100">
+            <div class="card-body text-center">
+                <h4>{{ rented_units }}</h4>
+                <p class="mb-0">{% trans "وحدات مؤجرة" %}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card text-white bg-warning h-100">
+            <div class="card-body text-center">
+                <h4>{{ total_expected|floatformat:0 }}</h4>
+                <p class="mb-0">{% trans "إيجارات متوقعة" %}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card text-white bg-secondary h-100">
+            <div class="card-body text-center">
+                <h4>{{ total_paid|floatformat:0 }}</h4>
+                <p class="mb-0">{% trans "مدفوع" %}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- جدول الوحدات -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">{% trans "الوحدات" %}</h5>
+        <a href="{% url 'add_unit_flow' %}" class="btn btn-light btn-sm">
+            <i class="bi bi-plus-circle"></i> {% trans "إضافة وحدة" %}
+        </a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>{% trans "رقم الوحدة" %}</th>
+                        <th>{% trans "النوع" %}</th>
+                        <th>{% trans "الحالة" %}</th>
+                        <th>{% trans "المستأجر الحالي" %}</th>
+                        <th>{% trans "الإيجار الشهري" %}</th>
+                        <th>{% trans "المتبقي" %}</th>
+                        <th>{% trans "إجراءات" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for unit in units %}
+                    <tr>
+                        <td>{{ unit.unit_number }}</td>
+                        <td>{{ unit.get_unit_type_display }}</td>
+                        <td>
+                            {% if unit.is_rented %}
+                                <span class="badge bg-success">{% trans "مؤجرة" %}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{% trans "شاغرة" %}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if unit.current_contract %}
+                                {{ unit.current_contract.tenant.name }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if unit.current_contract %}
+                                {{ unit.current_contract.total_monthly_with_tax|floatformat:2 }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td class="{% if unit.current_contract and unit.current_contract.remaining > 0 %}text-danger{% else %}text-success{% endif %} fw-bold">
+                            {% if unit.current_contract %}
+                                {{ unit.current_contract.remaining|floatformat:2 }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'unit_detail' unit.id %}" class="btn btn-sm btn-primary">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <a href="{% url 'edit_unit' unit.id %}" class="btn btn-sm btn-warning">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a href="{% url 'delete_unit' unit.id %}" class="btn btn-sm btn-danger">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-3">{% trans "لا توجد وحدات في هذا القسم." %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- قسم المصاريف -->
+<div class="card mb-4">
+    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">{% trans "المصاريف" %}</h5>
+        <a href="{% url 'add_expense' subcategory.id %}" class="btn btn-light btn-sm">
+            <i class="bi bi-plus-circle"></i> {% trans "إضافة مصروف" %}
+        </a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>{% trans "التاريخ" %}</th>
+                        <th>{% trans "البيان" %}</th>
+                        <th>{% trans "المبلغ" %}</th>
+                        <th>{% trans "ضريبة مستردة" %}</th>
+                        <th>{% trans "مرفق" %}</th>
+                        <th>{% trans "إجراءات" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for expense in subcategory.expenses.all %}
+                    <tr>
+                        <td>{{ expense.date }}</td>
+                        <td>{{ expense.description }}</td>
+                        <td>{{ expense.amount|floatformat:2 }}</td>
+                        <td>
+                            {% if expense.tax_refundable %}
+                                <span class="badge bg-info">{{ expense.tax_amount|floatformat:2 }}</span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if expense.attachment %}
+    <a href="{{ expense.attachment.url }}" target="_blank" class="btn btn-sm btn-info">
+        <i class="bi bi-file-earmark"></i> {% trans "عرض" %}
+    </a>
+{% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'edit_expense' expense.id %}" class="btn btn-sm btn-warning">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a href="{% url 'delete_expense' expense.id %}" class="btn btn-sm btn-danger">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-3">{% trans "لا توجد مصاريف مسجلة." %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

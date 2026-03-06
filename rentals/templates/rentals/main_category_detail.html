@@ -1,0 +1,85 @@
+{% extends 'rentals/base.html' %}
+{% load i18n %}
+
+{% block title %}{{ category.name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>{{ category.name }}</h2> <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>{{ category.name }}</h2>
+    <div>
+        <a href="{% url 'edit_main_category' category.id %}" class="btn btn-warning btn-sm">
+            <i class="bi bi-pencil"></i> {% trans "تعديل" %}
+        </a>
+        <a href="{% url 'delete_main_category' category.id %}" class="btn btn-danger btn-sm">
+            <i class="bi bi-trash"></i> {% trans "حذف" %}
+        </a>
+        <a href="{% url 'main_categories' %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-right"></i> {% trans "عودة" %}
+        </a>
+    </div>
+</div>
+    <div>
+        <a href="{% url 'main_categories' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-right"></i> {% trans "عودة للفئات" %}
+        </a>
+    </div>
+</div>
+
+<p class="lead">{{ category.description|default:_("لا يوجد وصف") }}</p>
+
+<!-- إحصائيات سريعة -->
+<div class="row g-2 mb-4">
+    <div class="col-md-4">
+        <div class="card text-white bg-info h-100">
+            <div class="card-body text-center">
+                <h3>{{ units_count }}</h3>
+                <p class="mb-0">{% trans "إجمالي الوحدات" %}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-success h-100">
+            <div class="card-body text-center">
+                <h3>{{ rented_count }}</h3>
+                <p class="mb-0">{% trans "وحدات مؤجرة" %}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-warning h-100">
+            <div class="card-body text-center">
+                <h3>{{ total_expected|floatformat:0 }}</h3>
+                <p class="mb-0">{% trans "إيجارات متوقعة" %}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h3 class="mb-3">{% trans "الأقسام الداخلية" %}</h3>
+<div class="row g-3">
+    {% for sub in subcategories %}
+    <div class="col-md-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">{{ sub.name }}</h5>
+                <p class="card-text">
+                    <i class="bi bi-geo-alt"></i> {{ sub.location|default:_("لا يوجد موقع") }}
+                </p>
+            </div>
+            <div class="card-footer bg-transparent">
+                <a href="{% url 'subcategory_detail' sub.id %}" class="btn btn-primary btn-sm w-100">
+                    {% trans "عرض الوحدات" %}
+                </a>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12">
+        <div class="alert alert-warning">
+            {% trans "لا توجد أقسام داخلية لهذه الفئة." %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

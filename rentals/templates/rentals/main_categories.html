@@ -1,0 +1,47 @@
+{% extends 'rentals/base.html' %}
+{% load i18n %}
+
+{% block title %}{% trans "الفئات الرئيسية" %}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>{% trans "الفئات الرئيسية" %}</h2>
+    <a href="{% url 'add_main_category' %}" class="btn btn-success">
+        <i class="bi bi-plus-circle"></i> {% trans "إضافة فئة جديدة" %}
+    </a>
+</div>
+
+<div class="row g-4">
+    {% for category in categories %}
+    <div class="col-md-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">{{ category.name }}</h5>
+                <p class="card-text text-muted">{{ category.description|default:_("لا يوجد وصف") }}</p>
+                <p class="mb-2">
+                    <i class="bi bi-diagram-3"></i> {% trans "عدد الأقسام:" %} {{ category.subcategories.count }}
+                </p>
+            </div>
+            <div class="card-footer bg-transparent d-flex justify-content-between">
+                <a href="{% url 'main_category_detail' category.id %}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-eye"></i> {% trans "عرض التفاصيل" %}
+                </a>
+                <small class="text-muted">{{ category.created_at|date:"Y-m-d" }}</small>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12">
+        <div class="alert alert-info text-center">
+            {% trans "لا توجد فئات رئيسية بعد." %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="mt-4">
+    <a href="{% url 'home' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-right"></i> {% trans "العودة للرئيسية" %}
+    </a>
+</div>
+{% endblock %}

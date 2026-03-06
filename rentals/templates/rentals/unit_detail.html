@@ -1,0 +1,171 @@
+{% extends 'rentals/base.html' %}
+{% load i18n %}
+
+{% block title %}{% trans "وحدة" %} {{ unit.unit_number }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>{% trans "تفاصيل الوحدة" %} - {{ unit.unit_number }}</h2>
+    <div>
+          {% if not unit.is_rented %}
+    <a href="{% url 'add_contract_for_unit' unit.id %}" class="btn btn-success btn-sm">
+        <i class="bi bi-plus-circle"></i> {% trans "إضافة عقد جديد" %}
+    </a>
+{% endif %}
+        <a href="{% url 'edit_unit' unit.id %}" class="btn btn-warning btn-sm">
+            <i class="bi bi-pencil"></i> {% trans "تعديل" %}
+        </a>
+        <a href="{% url 'delete_unit' unit.id %}" class="btn btn-danger btn-sm">
+            <i class="bi bi-trash"></i> {% trans "حذف" %}
+        </a>
+        <a href="{% url 'subcategory_detail' unit.sub_category.id %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-right"></i> {% trans "عودة" %}
+        </a>
+      
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">{% trans "معلومات الوحدة" %}</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <p><strong>{% trans "النوع:" %}</strong> {{ unit.get_unit_type_display }}</p>
+                <p><strong>{% trans "القسم:" %}</strong> <a href="{% url 'subcategory_detail' unit.sub_category.id %}">{{ unit.sub_category.name }}</a></p>
+                <p><strong>{% trans "الفئة الرئيسية:" %}</strong> <a href="{% url 'main_category_detail' unit.sub_category.main_category.id %}">{{ unit.sub_category.main_category.name }}</a></p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>{% trans "المساحة:" %}</strong> {{ unit.area|default:_("غير محدد") }} م²</p>
+                <p><strong>{% trans "الحالة:" %}</strong> 
+                    {% if unit.is_rented %}
+                        <span class="badge bg-success">{% trans "مؤجرة" %}</span>
+                    {% else %}
+                        <span class="badge bg-secondary">{% trans "شاغرة" %}</span>
+                    {% endif %}
+                </p>
+                <p><strong>{% trans "ملاحظات:" %}</strong> {{ unit.notes|default:_("لا توجد") }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if current_contract %}
+<div class="card mb-4">
+    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">{% trans "العقد الحالي" %}</h5>
+        <div>
+            <a href="{% url 'edit_contract' current_contract.id %}" class="btn btn-light btn-sm">
+                <i class="bi bi-pencil"></i> {% trans "تعديل العقد" %}
+            </a>
+            <a href="{% url 'delete_contract' current_contract.id %}" class="btn btn-danger btn-sm">
+                <i class="bi bi-trash"></i> {% trans "حذف العقد" %}
+            </a>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <p><strong>{% trans "رقم العقد:" %}</strong> {{ current_contract.contract_number }}</p>
+                <p><strong>{% trans "المستأجر:" %}</strong> 
+                    {{ current_contract.tenant.name }} 
+                    <a href="{% url 'edit_tenant' current_contract.tenant.id %}" class="btn btn-sm btn-outline-warning ms-2">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                </p>
+                <p><strong>{% trans "فترة العقد:" %}</strong> {{ current_contract.start_date }} - {{ current_contract.end_date }}</p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>{% trans "الإيجار الشهري (بدون ضريبة):" %}</strong> {{ current_contract.monthly_rent|floatformat:2 }}</p>
+                <p><strong>{% trans "الضريبة:" %}</strong> {{ current_contract.tax_amount_monthly|floatformat:2 }} ({{ current_contract.tax_rate }}%)</p>
+                <p><strong>{% trans "الإيجار شامل الضريبة:" %}</strong> {{ current_contract.total_monthly_with_tax|floatformat:2 }}</p>
+            </div>
+        </div>
+        <hr>
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card text-white bg-info mb-2">
+                    <div class="card-body text-center">
+                        <h5>{{ current_contract.duration_months }}</h5>
+                        <p class="mb-0">{% trans "مدة العقد (أشهر)" %}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-white bg-primary mb-2">
+                    <div class="card-body text-center">
+                        <h5>{{ current_contract.total_expected|floatformat:2 }}</h5>
+                        <p class="mb-0">{% trans "إجمالي المتوقع" %}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-white bg-warning mb-2">
+                    <div class="card-body text-center">
+                        <h5>{{ current_contract.total_paid|floatformat:2 }}</h5>
+                        <p class="mb-0">{% trans "إجمالي المدفوع" %}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="alert {% if current_contract.remaining > 0 %}alert-danger{% else %}alert-success{% endif %} mt-2">
+            <strong>{% trans "المتبقي:" %}</strong> {{ current_contract.remaining|floatformat:2 }}
+        </div>
+    </div>
+</div>
+
+<!-- سجل الدفعات -->
+<div class="card mb-4">
+    <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">{% trans "سجل الدفعات" %}</h5>
+        <a href="{% url 'add_payment' %}?contract={{ current_contract.id }}" class="btn btn-light btn-sm">
+            <i class="bi bi-plus-circle"></i> {% trans "إضافة دفعة" %}
+        </a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>{% trans "تاريخ الدفع" %}</th>
+                        <th>{% trans "المبلغ" %}</th>
+                        <th>{% trans "عن فترة" %}</th>
+                        <th>{% trans "طريقة الدفع" %}</th>
+                        <th>{% trans "ملاحظات" %}</th>
+                        <th>{% trans "إجراءات" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for payment in payments %}
+                    <tr>
+                        <td>{{ payment.payment_date }}</td>
+                        <td>{{ payment.amount_paid|floatformat:2 }}</td>
+                        <td>{{ payment.for_period_start }} - {{ payment.for_period_end }}</td>
+                        <td>{{ payment.get_payment_method_display }}</td>
+                        <td>{{ payment.notes|default:"-" }}</td>
+                        <td>
+                            <a href="{% url 'edit_payment' payment.id %}" class="btn btn-sm btn-warning">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a href="{% url 'delete_payment' payment.id %}" class="btn btn-sm btn-danger">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-3">{% trans "لا توجد دفعات مسجلة." %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-warning">
+    <i class="bi bi-exclamation-triangle"></i> {% trans "هذه الوحدة غير مؤجرة حالياً." %}
+</div>
+{% endif %}
+{% endblock %}

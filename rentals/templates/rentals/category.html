@@ -1,0 +1,10 @@
+{% extends 'rentals/base.html' %}
+{% load i18n %}
+
+{% block title %}{% trans "الفئة" %} - {{ category }}{% endblock %}
+
+{% block content %}
+<h2>{% trans "عرض الفئة" %}: {{ category }}</h2>
+<p>{% trans "هذه الصفحة قيد الإنشاء. سيتم إضافة التفاصيل قريباً." %}</p>
+<a href="{% url 'home' %}">{% trans "العودة للرئيسية" %}</a>
+{% endblock %}

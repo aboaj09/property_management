@@ -1,0 +1,27 @@
+{% extends 'rentals/base.html' %}
+{% load i18n %}
+
+{% block title %}{% trans "تأكيد الحذف" %}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow border-danger">
+            <div class="card-header bg-danger text-white">
+                <h4 class="mb-0">{% trans "تأكيد الحذف" %}</h4>
+            </div>
+            <div class="card-body text-center">
+                <i class="bi bi-exclamation-triangle display-1 text-danger"></i>
+                <h3 class="mt-3">{% trans "هل أنت متأكد من حذف هذا العنصر؟" %}</h3>
+                <p class="lead">{{ object }}</p>
+                <p class="text-muted">{% trans "لا يمكن التراجع عن هذه العملية." %}</p>
+                <form method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">{% trans "نعم، احذف" %}</button>
+                    <a href="javascript:history.back()" class="btn btn-outline-secondary">{% trans "إلغاء" %}</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
