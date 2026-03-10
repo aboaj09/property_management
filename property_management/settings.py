@@ -12,7 +12,26 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-default-key')
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost,amar.up.railway.app,.up.railway.app').split(',')
+# ... باقي الإعدادات ...
+
+# السماح لنطاقات Vercel
+ALLOWED_HOSTS = ['127.0.0.1', '.vercel.app', '.now.sh']
+
+# 🔴 تأكد من هذا السطر (يجب أن يشير إلى `app` في wsgi.py)
+WSGI_APPLICATION = 'property_management.wsgi.app'
+
+# إعدادات الملفات الثابتة (static)
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+# ملفات الوسائط (ملفات المستخدمين) - Vercel لا يدعمها محلياً!
+# إذا كنت تستخدم رفع الصور، ستحتاج Cloudinary أو خدمة تخزين خارجية
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# تأكد من أن DEBUG=False
+DEBUG = False
+
 CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'https://amar.up.railway.app,https://*.up.railway.app').split(',')
 
 # Application definition
