@@ -11,6 +11,7 @@ dj-database-url==2.3.0
 whitenoise==6.11.0
 sqlparse==0.5.3
 typing_extensions==4.12.2
-cloudinary==1.44.1
-cloudinary==1.44.1
 django-cloudinary-storage==0.3.0
+django-csp==3.8
+cloudinary==1.44.1
+
