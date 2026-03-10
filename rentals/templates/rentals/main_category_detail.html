@@ -1,85 +1,97 @@
 {% extends 'rentals/base.html' %}
 {% load i18n %}
 
-{% block title %}{{ category.name }}{% endblock %}
+{% block title %}{{ category.name }} - مكتب عمار{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h2>{{ category.name }}</h2> <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2>{{ category.name }}</h2>
-    <div>
-        <a href="{% url 'edit_main_category' category.id %}" class="btn btn-warning btn-sm">
-            <i class="bi bi-pencil"></i> {% trans "تعديل" %}
-        </a>
-        <a href="{% url 'delete_main_category' category.id %}" class="btn btn-danger btn-sm">
-            <i class="bi bi-trash"></i> {% trans "حذف" %}
-        </a>
-        <a href="{% url 'main_categories' %}" class="btn btn-outline-secondary btn-sm">
-            <i class="bi bi-arrow-right"></i> {% trans "عودة" %}
-        </a>
+<div class="container-fluid px-0">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>{{ category.name }}</h2>
+        <div>
+            <a href="{% url 'edit_main_category' category.id %}" class="btn btn-warning-custom btn-sm">
+                <i class="fas fa-edit"></i> تعديل
+            </a>
+            <a href="{% url 'delete_main_category' category.id %}" class="btn btn-danger-custom btn-sm">
+                <i class="fas fa-trash"></i> حذف
+            </a>
+        </div>
     </div>
-</div>
-    <div>
-        <a href="{% url 'main_categories' %}" class="btn btn-outline-secondary">
-            <i class="bi bi-arrow-right"></i> {% trans "عودة للفئات" %}
-        </a>
-    </div>
-</div>
+    <p class="text-muted mb-4">{{ category.description|default:"لا يوجد وصف" }}</p>
 
-<p class="lead">{{ category.description|default:_("لا يوجد وصف") }}</p>
+    <!-- إحصائيات سريعة -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="stat-card">
+                <div class="stat-icon" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
+                    <i class="fas fa-building"></i>
+                </div>
+                <div class="stat-label">إجمالي الوحدات</div>
+                <div class="stat-value">{{ units_count }}</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stat-card">
+                <div class="stat-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
+                    <i class="fas fa-hand-holding-usd"></i>
+                </div>
+                <div class="stat-label">وحدات مؤجرة</div>
+                <div class="stat-value">{{ rented_count }}</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stat-card">
+                <div class="stat-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                    <i class="fas fa-money-bill-wave"></i>
+                </div>
+                <div class="stat-label">إيجارات متوقعة</div>
+                <div class="stat-value">{{ total_expected|floatformat:0 }}</div>
+            </div>
+        </div>
+    </div>
 
-<!-- إحصائيات سريعة -->
-<div class="row g-2 mb-4">
-    <div class="col-md-4">
-        <div class="card text-white bg-info h-100">
-            <div class="card-body text-center">
-                <h3>{{ units_count }}</h3>
-                <p class="mb-0">{% trans "إجمالي الوحدات" %}</p>
-            </div>
+    <!-- الأقسام الفرعية -->
+    <div class="content-card">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0">الأقسام الفرعية</h5>
+            <a href="{% url 'add_sub_category' category.id %}" class="btn btn-success-custom btn-sm">
+                <i class="fas fa-plus-circle"></i> إضافة قسم
+            </a>
         </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card text-white bg-success h-100">
-            <div class="card-body text-center">
-                <h3>{{ rented_count }}</h3>
-                <p class="mb-0">{% trans "وحدات مؤجرة" %}</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card text-white bg-warning h-100">
-            <div class="card-body text-center">
-                <h3>{{ total_expected|floatformat:0 }}</h3>
-                <p class="mb-0">{% trans "إيجارات متوقعة" %}</p>
-            </div>
-        </div>
-    </div>
-</div>
 
-<h3 class="mb-3">{% trans "الأقسام الداخلية" %}</h3>
-<div class="row g-3">
-    {% for sub in subcategories %}
-    <div class="col-md-4">
-        <div class="card h-100 shadow-sm">
-            <div class="card-body">
-                <h5 class="card-title">{{ sub.name }}</h5>
-                <p class="card-text">
-                    <i class="bi bi-geo-alt"></i> {{ sub.location|default:_("لا يوجد موقع") }}
-                </p>
+        <div class="row g-3">
+            {% for sub in subcategories %}
+            <div class="col-md-4">
+                <div class="card h-100 border-0 shadow-sm">
+                    <div class="card-body">
+                        <h6 class="fw-bold">{{ sub.name }}</h6>
+                        <p class="small text-muted mb-2">{{ sub.location|default:"-" }}</p>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="badge {% if sub.is_active %}badge-success-custom{% else %}badge-secondary-custom{% endif %}">
+                                {{ sub.is_active|yesno:"نشط,غير نشط" }}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-transparent border-0 d-flex justify-content-between">
+                        <a href="{% url 'subcategory_detail' sub.id %}" class="btn btn-primary-custom btn-sm">
+                            <i class="fas fa-eye"></i> عرض
+                        </a>
+                        <div>
+                            <a href="{% url 'edit_sub_category' sub.id %}" class="btn btn-warning-custom btn-sm">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            <a href="{% url 'delete_sub_category' sub.id %}" class="btn btn-danger-custom btn-sm">
+                                <i class="fas fa-trash"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="card-footer bg-transparent">
-                <a href="{% url 'subcategory_detail' sub.id %}" class="btn btn-primary btn-sm w-100">
-                    {% trans "عرض الوحدات" %}
-                </a>
+            {% empty %}
+            <div class="col-12">
+                <p class="text-center text-muted py-4">لا توجد أقسام فرعية بعد</p>
             </div>
+            {% endfor %}
         </div>
     </div>
-    {% empty %}
-    <div class="col-12">
-        <div class="alert alert-warning">
-            {% trans "لا توجد أقسام داخلية لهذه الفئة." %}
-        </div>
-    </div>
-    {% endfor %}
 </div>
 {% endblock %}

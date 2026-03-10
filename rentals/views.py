@@ -30,6 +30,9 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from django.db.models import Q
+from django.db.models import Sum
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 
 # ============================================================
 # دوال مساعدة للضريبة الربعية
@@ -56,30 +59,40 @@ def get_quarter_tax(year, quarter):
     start_date, end_date = get_quarter_dates(year, quarter)
     if not start_date:
         return {'due': 0, 'collected': 0}
-    
-    contracts = Contract.objects.filter(
-        start_date__lte=end_date,
-        is_active=True
-    ).exclude(start_date__gt=end_date)
-    
+
+    # جلب جميع العقود النشطة
+    all_contracts = Contract.objects.filter(is_active=True)
     tax_due = 0
-    for contract in contracts:
-        if contract.start_date <= end_date and contract.end_date >= start_date:
-            overlap_start = max(contract.start_date, start_date)
-            overlap_end = min(contract.end_date, end_date)
-            months = (overlap_end.year - overlap_start.year) * 12 + (overlap_end.month - overlap_start.month) + 1
-            tax_due += contract.tax_amount_monthly * months
-    
-    payments = Payment.objects.filter(
-        payment_date__gte=start_date,
-        payment_date__lte=end_date
-    )
+
+    for contract in all_contracts:
+        # تاريخ بداية العقد الفعلي بعد فترة السماح
+        effective_start = contract.start_date + timedelta(days=contract.grace_period_days)
+        contract_end = contract.start_date + relativedelta(months=contract.lease_duration_months) - timedelta(days=1)
+
+        # إذا كان العقد لا يتداخل مع الربع (مع مراعاة فترة السماح)
+        if effective_start > end_date or contract_end < start_date:
+            continue
+
+        # تحديد دورة السداد بالأشهر
+        interval_map = {'monthly': 1, 'quarterly': 3, 'half_yearly': 6, 'yearly': 12}
+        interval_months = interval_map.get(contract.payment_interval, 1)
+
+        # توليد تواريخ الاستحقاق: نبدأ من تاريخ بداية العقد الفعلي (بعد السماح)
+        # ثم نضيف الدورة في كل مرة
+        due_date = effective_start
+        while due_date <= contract_end:
+            if start_date <= due_date <= end_date:
+                tax_for_period = contract.tax_amount_monthly * interval_months
+                tax_due += tax_for_period
+            due_date += relativedelta(months=interval_months)
+
+    # الضريبة المحصلة تبقى كما هي (من الدفعات الفعلية)
+    payments = Payment.objects.filter(payment_date__gte=start_date, payment_date__lte=end_date)
     tax_collected = 0
     for payment in payments:
-        contract = payment.contract
-        if contract.has_tax:
-            tax_collected += payment.amount_paid * (contract.tax_rate / 100) / (1 + contract.tax_rate/100)
-    
+        if payment.contract.has_tax:
+            tax_collected += payment.amount_paid * (payment.contract.tax_rate / 100) / (1 + payment.contract.tax_rate/100)
+
     return {'due': round(tax_due, 2), 'collected': round(tax_collected, 2)}
 
 # ============================================================
@@ -118,10 +131,13 @@ def register_view(request):
 # دوال محمية (يجب تسجيل الدخول)
 # ============================================================
 
+
 @login_required
 def home(request):
     current_year = datetime.now().year
-    
+    current_month = datetime.now().month
+
+    # إحصائيات عامة
     total_categories = MainCategory.objects.count()
     total_units = Unit.objects.count()
     rented_units = Unit.objects.filter(is_rented=True).count()
@@ -131,6 +147,7 @@ def home(request):
     total_paid = Payment.objects.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
     total_remaining = total_expected - total_paid
     
+    # الضريبة (باستخدام الدالة المعدلة)
     total_tax_due = 0
     total_tax_collected = 0
     quarters = []
@@ -144,6 +161,16 @@ def home(request):
         total_tax_due += tax_data['due']
         total_tax_collected += tax_data['collected']
     
+    # حساب إجمالي الضريبة المستردة من المصاريف
+    expenses_refundable = Expense.objects.filter(tax_refundable=True)
+    total_tax_refunded = 0
+    for exp in expenses_refundable:
+        total_tax_refunded += exp.tax_amount
+
+    # صافي الضريبة = الضريبة المستحقة - الضريبة المستردة
+    net_tax = total_tax_due - total_tax_refunded
+        
+    # بيانات الأقسام الفرعية
     subcategories = SubCategory.objects.filter(is_active=True).prefetch_related('units', 'expenses')
     subcategories_data = []
     for sub in subcategories:
@@ -153,6 +180,9 @@ def home(request):
         total_rent_expected = sum(c.total_expected for c in contracts_sub)
         total_expense = sub.total_expenses()
         refundable_tax = sub.total_refundable_tax()
+        total_paid_sub = Payment.objects.filter(contract__unit__sub_category=sub).aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
+        total_remaining_sub = total_rent_expected - total_paid_sub
+        
         subcategories_data.append({
             'id': sub.id,
             'name': sub.name,
@@ -162,7 +192,55 @@ def home(request):
             'total_rent_expected': total_rent_expected,
             'total_expense': total_expense,
             'refundable_tax': refundable_tax,
+            'total_paid': total_paid_sub,          
+            'total_remaining': total_remaining_sub,
         })
+    
+    # بيانات الرسوم البيانية (كما هي)
+    monthly_labels = []
+    monthly_income = []
+    for i in range(5, -1, -1):
+        month = current_month - i
+        year = current_year
+        if month <= 0:
+            month += 12
+            year -= 1
+        start_date = date(year, month, 1)
+        if month == 12:
+            end_date = date(year+1, 1, 1) - timedelta(days=1)
+        else:
+            end_date = date(year, month+1, 1) - timedelta(days=1)
+        
+        month_payments = Payment.objects.filter(
+            payment_date__gte=start_date,
+            payment_date__lte=end_date
+        ).aggregate(total=Sum('amount_paid'))['total'] or 0
+        
+        monthly_labels.append(f"{month}/{year}")
+        monthly_income.append(float(month_payments))
+    
+    expenses_by_sub = Expense.objects.values('sub_category__name').annotate(
+        total=Sum('amount')
+    ).order_by('-total')[:5]
+    expense_categories = [item['sub_category__name'] for item in expenses_by_sub]
+    expense_amounts = [float(item['total']) for item in expenses_by_sub]
+    
+    current_start = date(current_year, current_month, 1)
+    if current_month == 12:
+        current_end = date(current_year+1, 1, 1) - timedelta(days=1)
+    else:
+        current_end = date(current_year, current_month+1, 1) - timedelta(days=1)
+    
+    current_expected = 0
+    for contract in contracts:
+        contract_end = contract.start_date + relativedelta(months=contract.lease_duration_months) - timedelta(days=1)
+        if contract.start_date <= current_end and contract_end >= current_start:
+            current_expected += contract.total_monthly_with_tax
+    
+    current_paid = Payment.objects.filter(
+        payment_date__gte=current_start,
+        payment_date__lte=current_end
+    ).aggregate(total=Sum('amount_paid'))['total'] or 0
     
     context = {
         'total_categories': total_categories,
@@ -176,6 +254,14 @@ def home(request):
         'quarters': quarters,
         'current_year': current_year,
         'subcategories': subcategories_data,
+        'monthly_labels': monthly_labels,
+        'monthly_income': monthly_income,
+        'expense_categories': expense_categories,
+        'expense_amounts': expense_amounts,
+        'current_expected': float(current_expected),
+        'current_paid': float(current_paid),
+        'total_tax_refunded': total_tax_refunded,
+        'net_tax': net_tax,
     }
     return render(request, 'rentals/home.html', context)
 
@@ -216,6 +302,8 @@ def subcategory_detail(request, pk):
     contracts = Contract.objects.filter(unit__sub_category=subcategory, is_active=True)
     total_expected = sum(c.total_expected for c in contracts)
     total_paid = Payment.objects.filter(contract__unit__sub_category=subcategory).aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
+    total_expense = subcategory.total_expenses()  # هذه الدالة موجودة في models.py
+    refundable_tax = subcategory.total_refundable_tax()
     
     context = {
         'subcategory': subcategory,
@@ -223,6 +311,8 @@ def subcategory_detail(request, pk):
         'rented_units': rented_units,
         'total_expected': total_expected,
         'total_paid': total_paid,
+        'total_expense': total_expense,
+        'refundable_tax': refundable_tax,
     }
     return render(request, 'rentals/subcategory_detail.html', context)
 

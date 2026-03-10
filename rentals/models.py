@@ -143,6 +143,7 @@ class Contract(models.Model):
     notes = models.TextField(blank=True, verbose_name="ملاحظات")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    grace_period_days = models.PositiveIntegerField(default=0, verbose_name="فترة السماح (أيام)", help_text="عدد الأيام قبل بداية العقد التي لا تحتسب فيها الضريبة")
 
     class Meta:
         verbose_name = "عقد"
@@ -167,6 +168,11 @@ class Contract(models.Model):
     def tax_amount_monthly(self):
         if self.has_tax:
             return self.monthly_rent * (self.tax_rate / 100)
+        return 0
+    
+    def get_tax_from_total(self, total_with_tax):
+        if self.has_tax and self.tax_rate > 0:
+           return total_with_tax * (self.tax_rate / 100) / (1 + self.tax_rate/100)
         return 0
 
     @property
@@ -197,6 +203,7 @@ class Contract(models.Model):
             if self.has_tax:
                 total += payment.amount_paid * (self.tax_rate / 100) / (1 + self.tax_rate/100)
         return total
+    
 
 
 class Payment(models.Model):

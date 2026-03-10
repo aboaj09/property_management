@@ -1,47 +1,50 @@
 {% extends 'rentals/base.html' %}
 {% load i18n %}
 
-{% block title %}{% trans "الفئات الرئيسية" %}{% endblock %}
+{% block title %}المشاريع - مكتب عمار{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>{% trans "الفئات الرئيسية" %}</h2>
-    <a href="{% url 'add_main_category' %}" class="btn btn-success">
-        <i class="bi bi-plus-circle"></i> {% trans "إضافة فئة جديدة" %}
-    </a>
-</div>
+<div class="container-fluid px-0">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">المشاريع</h2>
+        <a href="{% url 'add_main_category' %}" class="btn btn-primary-custom">
+            <i class="fas fa-plus-circle ms-1"></i> إضافة مشروع
+        </a>
+    </div>
 
-<div class="row g-4">
-    {% for category in categories %}
-    <div class="col-md-4">
-        <div class="card h-100 shadow-sm">
-            <div class="card-body">
-                <h5 class="card-title">{{ category.name }}</h5>
-                <p class="card-text text-muted">{{ category.description|default:_("لا يوجد وصف") }}</p>
-                <p class="mb-2">
-                    <i class="bi bi-diagram-3"></i> {% trans "عدد الأقسام:" %} {{ category.subcategories.count }}
-                </p>
-            </div>
-            <div class="card-footer bg-transparent d-flex justify-content-between">
-                <a href="{% url 'main_category_detail' category.id %}" class="btn btn-primary btn-sm">
-                    <i class="bi bi-eye"></i> {% trans "عرض التفاصيل" %}
-                </a>
-                <small class="text-muted">{{ category.created_at|date:"Y-m-d" }}</small>
+    <div class="row g-3">
+        {% for category in categories %}
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title fw-bold">{{ category.name }}</h5>
+                    <p class="card-text text-muted small">{{ category.description|default:"لا يوجد وصف" }}</p>
+                    <hr>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>الأقسام الفرعية:</span>
+                        <span class="badge badge-info-custom">{{ category.subcategories.count }}</span>
+                    </div>
+                </div>
+                <div class="card-footer bg-transparent border-0 d-flex justify-content-between">
+                    <a href="{% url 'main_category_detail' category.id %}" class="btn btn-primary-custom btn-sm">
+                        <i class="fas fa-eye"></i> عرض
+                    </a>
+                    <div>
+                        <a href="{% url 'edit_main_category' category.id %}" class="btn btn-warning-custom btn-sm">
+                            <i class="fas fa-edit"></i>
+                        </a>
+                        <a href="{% url 'delete_main_category' category.id %}" class="btn btn-danger-custom btn-sm">
+                            <i class="fas fa-trash"></i>
+                        </a>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-    {% empty %}
-    <div class="col-12">
-        <div class="alert alert-info text-center">
-            {% trans "لا توجد فئات رئيسية بعد." %}
+        {% empty %}
+        <div class="col-12">
+            <p class="text-center text-muted py-5">لا توجد مشاريع بعد</p>
         </div>
+        {% endfor %}
     </div>
-    {% endfor %}
-</div>
-
-<div class="mt-4">
-    <a href="{% url 'home' %}" class="btn btn-outline-secondary">
-        <i class="bi bi-arrow-right"></i> {% trans "العودة للرئيسية" %}
-    </a>
 </div>
 {% endblock %}

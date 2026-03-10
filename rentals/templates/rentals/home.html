@@ -1,259 +1,126 @@
 {% extends 'rentals/base.html' %}
 {% load i18n %}
 
-{% block title %}{% trans "لوحة التحكم" %}{% endblock %}
+{% block title %}لوحة التحكم - مكتب عمار{% endblock %}
 
 {% block content %}
-<h2 class="mb-4">{% trans "مرحباً بك في مكتب عمار المدينة العقاري" %}</h2>
+<div class="container-fluid px-0">
+    <h2 class="mb-4">مرحباً بك في النظام</h2>
 
-<!-- إحصائيات سريعة -->
-<div class="row g-3 mb-4">
-    <div class="col-md-3 col-6">
-        <div class="card text-white bg-primary h-100">
-            <div class="card-body text-center">
-                <h3>{{ total_categories }}</h3>
-                <p class="mb-0">{% trans "فئة رئيسية" %}</p>
+    <!-- إحصائيات سريعة (بدون الضريبة) -->
+    <div class="row g-4 mb-5">
+        <div class="col-md-3 col-6">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-folder"></i>
+                </div>
+                <div class="stat-label">المشاريع</div>
+                <div class="stat-value">{{ total_categories }}</div>
             </div>
         </div>
-    </div>
-    <div class="col-md-3 col-6">
-        <div class="card text-white bg-success h-100">
-            <div class="card-body text-center">
-                <h3>{{ total_units }}</h3>
-                <p class="mb-0">{% trans "إجمالي الوحدات" %}</p>
+        <div class="col-md-3 col-6">
+            <div class="stat-card">
+                <div class="stat-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
+                    <i class="fas fa-building"></i>
+                </div>
+               
+    
+                <div class="stat-label">الدخل الإجمالي</div>
+                <div class="stat-value">{{ total_expected|floatformat:0 }}</div>
             </div>
         </div>
-    </div>
-    <div class="col-md-3 col-6">
-        <div class="card text-dark bg-warning h-100">
-            <div class="card-body text-center">
-                <h3>{{ rented_units }}</h3>
-                <p class="mb-0">{% trans "وحدات مؤجرة" %}</p>
+        <div class="col-md-3 col-6">
+            <div class="stat-card">
+                <div class="stat-icon" style="background: linear-gradient(135deg, #14b8a6, #0d9488);">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="stat-label">مدفوع</div>
+                <div class="stat-value">{{ total_paid|floatformat:0 }}</div>
             </div>
         </div>
-    </div>
-    <div class="col-md-3 col-6">
-        <div class="card text-white bg-info h-100">
-            <div class="card-body text-center">
-                <h3>{{ total_expected|floatformat:0 }}</h3>
-                <p class="mb-0">{% trans "إيجارات متوقعة" %}</p>
+        <div class="col-md-3 col-6">
+            <div class="stat-card">
+                <div class="stat-icon" style="background: linear-gradient(135deg, #ef4444, #dc2626);">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <div class="stat-label">المتبقي</div>
+                <div class="stat-value">{{ total_remaining|floatformat:0 }}</div>
             </div>
         </div>
+        <!-- تم حذف كروتي الضريبة -->
     </div>
-    <div class="col-md-3 col-6">
-        <div class="card text-white bg-secondary h-100">
-            <div class="card-body text-center">
-                <h3>{{ total_paid|floatformat:0 }}</h3>
-                <p class="mb-0">{% trans "مدفوع" %}</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 col-6">
-        <div class="card text-white bg-danger h-100">
-            <div class="card-body text-center">
-                <h3>{{ total_remaining|floatformat:0 }}</h3>
-                <p class="mb-0">{% trans "المتبقي" %}</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 col-6">
-        <div class="card text-white bg-dark h-100">
-            <div class="card-body text-center">
-                <h3>{{ total_tax_due|floatformat:0 }}</h3>
-                <p class="mb-0">{% trans "ضريبة مستحقة" %}</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 col-6">
-        <div class="card text-white bg-success h-100">
-            <div class="card-body text-center">
-                <h3>{{ total_tax_collected|floatformat:0 }}</h3>
-                <p class="mb-0">{% trans "ضريبة محصلة" %}</p>
-            </div>
-        </div>
-    </div>
-</div>
 
-<!-- الرسوم البيانية -->
-<div class="row g-4 mb-4">
-    <!-- الإيرادات الشهرية -->
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">{% trans "الإيرادات الشهرية (آخر 6 أشهر)" %}</h5>
+   <!-- الأقسام الفرعية -->
+<div class="row mb-5">
+    <div class="col-12">
+        <div class="content-card">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">الأقسام الفرعية</h5>
+                <span class="badge badge-info-custom">{{ subcategories|length }} قسم</span>
             </div>
-            <div class="card-body">
-                <canvas id="monthlyIncomeChart"></canvas>
-            </div>
-        </div>
-    </div>
-    <!-- توزيع المصاريف -->
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header bg-success text-white">
-                <h5 class="mb-0">{% trans "أعلى 5 أقسام في المصاريف" %}</h5>
-            </div>
-            <div class="card-body">
-                <canvas id="expenseChart"></canvas>
-            </div>
-        </div>
-    </div>
-    <!-- مقارنة الإيجارات -->
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header bg-info text-white">
-                <h5 class="mb-0">{% trans "الإيجارات المتوقعة vs المحصلة (الشهر الحالي)" %}</h5>
-            </div>
-            <div class="card-body">
-                <canvas id="comparisonChart"></canvas>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- الأقسام الفرعية -->
-<div class="card mb-4">
-    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">{% trans "الأقسام الفرعية" %}</h5>
-        <span class="badge bg-light text-dark">{{ subcategories|length }} {% trans "قسم" %}</span>
-    </div>
-    <div class="card-body">
-        <div class="row g-3">
-            {% for sub in subcategories %}
-            <div class="col-md-4">
-                <div class="card h-100 shadow-sm border-primary">
-                    <div class="card-body">
-                        <h5 class="card-title">{{ sub.name }}</h5>
-                        <p class="card-subtitle mb-2 text-muted">{{ sub.main_category }}</p>
-                        <div class="row small g-1 mt-2">
-                            <div class="col-6">{% trans "وحدات:" %} {{ sub.units_count }}</div>
-                            <div class="col-6">{% trans "مؤجرة:" %} {{ sub.rented_count }}</div>
-                            <div class="col-12"><strong>{% trans "إيجارات متوقعة:" %}</strong> {{ sub.total_rent_expected|floatformat:0 }}</div>
-                            <div class="col-12"><strong>{% trans "مصاريف:" %}</strong> {{ sub.total_expense|floatformat:0 }}</div>
-                            <div class="col-12"><strong>{% trans "ضريبة مستردة:" %}</strong> {{ sub.refundable_tax|floatformat:0 }}</div>
+            <div class="row g-3">
+                {% for sub in subcategories %}
+                <div class="col-md-4">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body">
+                            <h6 class="card-title fw-bold">{{ sub.name }}</h6>
+                            <p class="card-subtitle text-muted small">{{ sub.main_category }}</p>
+                            <hr>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>الوحدات:</span>
+                                <span class="fw-bold">{{ sub.units_count }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>المؤجرة:</span>
+                                <span class="fw-bold">{{ sub.rented_count }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>إيجارات متوقعة:</span>
+                                <span class="fw-bold">{{ sub.total_rent_expected|floatformat:0 }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>مصاريف:</span>
+                                <span class="fw-bold">{{ sub.total_expense|floatformat:0 }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>مدفوع:</span>
+                                <span class="fw-bold text-success">{{ sub.total_paid|floatformat:0 }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>المتبقي:</span>
+                                <span class="fw-bold {% if sub.total_remaining > 0 %}text-danger{% else %}text-success{% endif %}">
+                                    {{ sub.total_remaining|floatformat:0 }}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-transparent border-0">
+                            <a href="{% url 'subcategory_detail' sub.id %}" class="btn btn-primary-custom btn-sm w-100">
+                                <i class="fas fa-eye ms-1"></i> عرض التفاصيل
+                            </a>
                         </div>
                     </div>
-                    <div class="card-footer bg-transparent">
-                        <a href="{% url 'subcategory_detail' sub.id %}" class="btn btn-primary btn-sm w-100">
-                            <i class="bi bi-box-arrow-in-left"></i> {% trans "عرض التفاصيل" %}
-                        </a>
-                    </div>
                 </div>
-            </div>
-            {% empty %}
-            <div class="col-12">
-                <div class="alert alert-info text-center">
-                    {% trans "لا توجد أقسام فرعية بعد." %}
+                {% empty %}
+                <div class="col-12">
+                    <p class="text-center text-muted py-4">لا توجد أقسام فرعية بعد</p>
                 </div>
+                {% endfor %}
             </div>
-            {% endfor %}
         </div>
     </div>
 </div>
-
-<!-- روابط سريعة للإدخال -->
-<div class="row g-3">
-    <div class="col-md-6">
-        <a href="{% url 'add_main_category' %}" class="text-decoration-none">
-            <div class="card text-white bg-primary h-100">
-                <div class="card-body text-center py-4">
-                    <i class="bi bi-folder-plus display-4"></i>
-                    <h4 class="mt-2">{% trans "إضافة فئة رئيسية جديدة" %}</h4>
-                    <p class="mb-0">{% trans "ابدأ بإضافة محلات، عمائر، أو مزارع" %}</p>
-                </div>
-            </div>
-        </a>
-    </div>
-    <div class="col-md-6">
-        <a href="{% url 'add_unit_flow' %}" class="text-decoration-none">
-            <div class="card text-white bg-success h-100">
-                <div class="card-body text-center py-4">
-                    <i class="bi bi-plus-circle display-4"></i>
-                    <h4 class="mt-2">{% trans "إضافة وحدة جديدة" %}</h4>
-                    <p class="mb-0">{% trans "أضف وحدة مع مستأجر وعقد ودفعة" %}</p>
-                </div>
-            </div>
-        </a>
+    <!-- روابط سريعة للإدخال -->
+    <div class="row g-3">
+        <div class="col-md-6">
+            <a href="{% url 'add_main_category' %}" class="btn btn-primary-custom btn-custom w-100 py-3">
+                <i class="fas fa-plus-circle ms-2"></i> إضافة مشروع جديد
+            </a>
+        </div>
+        <div class="col-md-6">
+            <a href="{% url 'add_unit_flow' %}" class="btn btn-success-custom btn-custom w-100 py-3">
+                <i class="fas fa-plus-circle ms-2"></i> إضافة وحدة جديدة
+            </a>
+        </div>
     </div>
 </div>
-
-<!-- Chart.js -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-    // دالة لإنشاء الرسوم البيانية بعد تحميل الصفحة
-    document.addEventListener('DOMContentLoaded', function() {
-        // 1. الإيرادات الشهرية
-        const ctx1 = document.getElementById('monthlyIncomeChart').getContext('2d');
-        new Chart(ctx1, {
-            type: 'line',
-            data: {
-                labels: {{ monthly_labels|safe }},
-                datasets: [{
-                    label: '{% trans "الإيرادات" %}',
-                    data: {{ monthly_income|safe }},
-                    borderColor: 'rgb(75, 192, 192)',
-                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                    tension: 0.1,
-                    fill: true
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { position: 'top' },
-                }
-            }
-        });
-
-        // 2. توزيع المصاريف
-        const ctx2 = document.getElementById('expenseChart').getContext('2d');
-        new Chart(ctx2, {
-            type: 'bar',
-            data: {
-                labels: {{ expense_categories|safe }},
-                datasets: [{
-                    label: '{% trans "المصاريف" %}',
-                    data: {{ expense_amounts|safe }},
-                    backgroundColor: 'rgba(255, 99, 132, 0.5)',
-                    borderColor: 'rgb(255, 99, 132)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { position: 'top' },
-                }
-            }
-        });
-
-        // 3. مقارنة الإيجارات
-        const ctx3 = document.getElementById('comparisonChart').getContext('2d');
-        new Chart(ctx3, {
-            type: 'bar',
-            data: {
-                labels: ['{% trans "متوقع" %}', '{% trans "محصل" %}'],
-                datasets: [{
-                    label: '{% trans "القيمة" %}',
-                    data: [{{ current_expected }}, {{ current_paid }}],
-                    backgroundColor: [
-                        'rgba(54, 162, 235, 0.5)',
-                        'rgba(75, 192, 192, 0.5)'
-                    ],
-                    borderColor: [
-                        'rgb(54, 162, 235)',
-                        'rgb(75, 192, 192)'
-                    ],
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { display: false },
-                }
-            }
-        });
-    });
-</script>
 {% endblock %}

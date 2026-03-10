@@ -54,4 +54,38 @@
         }
     });
 </script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const totalInput = document.getElementById('id_total_with_tax');
+    const taxCheckbox = document.getElementById('id_has_tax');
+    const taxRateInput = document.getElementById('id_tax_rate');
+    const rentAmountInput = document.getElementById('id_rent_amount');
+
+    function calculateRent() {
+        const total = parseFloat(totalInput.value) || 0;
+        if (taxCheckbox.checked) {
+            const taxRate = parseFloat(taxRateInput.value) || 0;
+            if (taxRate > 0) {
+                const rent = total / (1 + taxRate/100);
+                rentAmountInput.value = rent.toFixed(2);
+            } else {
+                rentAmountInput.value = total.toFixed(2);
+            }
+        } else {
+            rentAmountInput.value = total.toFixed(2);
+        }
+    }
+
+    totalInput.addEventListener('input', calculateRent);
+    taxCheckbox.addEventListener('change', calculateRent);
+    taxRateInput.addEventListener('input', calculateRent);
+
+    // إظهار/إخفاء حقل نسبة الضريبة
+    function toggleTaxRate() {
+        document.getElementById('id_tax_rate').parentNode.style.display = taxCheckbox.checked ? 'block' : 'none';
+    }
+    toggleTaxRate();
+    taxCheckbox.addEventListener('change', toggleTaxRate);
+});
+</script>
 {% endblock %}
