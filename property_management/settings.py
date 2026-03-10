@@ -146,7 +146,19 @@ if not DEBUG:
 
     # Content Security Policy
 CSP_DEFAULT_SRC = ("'self'",)
-CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'", "cdn.jsdelivr.net", "fonts.googleapis.com")
-CSP_STYLE_SRC = ("'self'", "'unsafe-inline'", "cdn.jsdelivr.net", "fonts.googleapis.com")
-CSP_FONT_SRC = ("'self'", "fonts.gstatic.com")
-CSP_IMG_SRC = ("'self'", "data:")
+CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'", "'unsafe-eval'", 
+                  "cdn.jsdelivr.net", "fonts.googleapis.com", 
+                  "cdnjs.cloudflare.com", "code.jquery.com")
+CSP_STYLE_SRC = ("'self'", "'unsafe-inline'", 
+                 "cdn.jsdelivr.net", "fonts.googleapis.com", 
+                 "cdnjs.cloudflare.com")
+CSP_FONT_SRC = ("'self'", "fonts.gstatic.com", "cdn.jsdelivr.net", 
+                "cdnjs.cloudflare.com", "data:")
+CSP_IMG_SRC = ("'self'", "data:", "cdn.jsdelivr.net", "*.cloudinary.com")
+CSP_CONNECT_SRC = ("'self'",)
+CSP_MEDIA_SRC = ("'self'",)
+CSP_OBJECT_SRC = ("'none'",)
+CSP_BASE_URI = ("'self'",)
+CSP_FRAME_ANCESTORS = ("'none'",)
+CSP_FORM_ACTION = ("'self'",)
+CSP_INCLUDE_NONCE_IN = ('script-src',)
