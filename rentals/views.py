@@ -1300,17 +1300,16 @@ def advanced_search(request):
 
     # ------------------ المستأجرين (مع استبعاد المحذوفين) ------------------
     if entity in ['all', 'tenants']:
-        # الأهم: نستبعد المحذوفين
-        tenants_qs = Tenant.objects.filter(is_deleted=False)
-        if query:
-            tenants_qs = tenants_qs.filter(
-                Q(name__icontains=query) |
-                Q(identity_number__icontains=query) |
-                Q(phone__icontains=query) |
-                Q(email__icontains=query)
-            )
-        results['tenants'] = tenants_qs[:50]
-        count += len(results['tenants'])
+        tenants_qs = Tenant.objects.filter(is_deleted=False)  # استبعاد المحذوفين
+    if query:
+        tenants_qs = tenants_qs.filter(
+            Q(name__icontains=query) |
+            Q(identity_number__icontains=query) |
+            Q(phone__icontains=query) |
+            Q(email__icontains=query)
+        )
+    results['tenants'] = tenants_qs[:50]
+    count += len(results['tenants'])
 
     # ------------------ الدفعات ------------------
     if entity in ['all', 'payments']:
