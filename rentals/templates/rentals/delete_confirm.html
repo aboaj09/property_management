@@ -13,4 +13,22 @@
     </form>
   </div>
 </div>
+{% extends 'rentals/base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="card">
+  <div class="card-body text-center">
+    <h3>تأكيد الحذف</h3>
+    <p>هل أنت متأكد من حذف "{{ object.name }}"؟</p>
+    <form method="post">
+      {% csrf_token %}
+      {% if next %}
+        <input type="hidden" name="next" value="{{ next }}">
+      {% endif %}
+      <button type="submit" class="btn btn-danger">نعم، احذف</button>
+      <a href="javascript:history.back()" class="btn btn-secondary">إلغاء</a>
+    </form>
+  </div>
+</div>
 {% endblock %}

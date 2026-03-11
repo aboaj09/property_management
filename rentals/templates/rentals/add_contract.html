@@ -11,9 +11,26 @@
                 <h4 class="mb-0">{% trans "إضافة عقد" %}</h4>
             </div>
             <div class="card-body">
-                <p><strong>{% trans "الوحدة:" %}</strong> {{ unit.unit_number }}</p>
-                <p><strong>{% trans "المستأجر:" %}</strong> {{ tenant.name }}</p>
-                <form method="post">
+                <!-- عرض معلومات الوحدة والمستأجر -->
+                <div class="alert alert-info">
+                    <h5>معلومات الوحدة</h5>
+                    <p><strong>رقم الوحدة:</strong> {{ unit.unit_number }}</p>
+                    <p><strong>نوع الوحدة:</strong> {{ unit.get_unit_type_display }}</p>
+                    <p><strong>القسم:</strong> {{ unit.sub_category.name }}</p>
+                </div>
+                
+                <div class="alert alert-success">
+                    <h5>معلومات المستأجر 
+                        <a href="{% url 'edit_tenant' tenant.id %}?next={% url 'add_contract' %}" class="btn btn-sm btn-warning float-left">
+                            <i class="fas fa-edit"></i> تعديل
+                        </a>
+                    </h5>
+                    <p><strong>الاسم:</strong> {{ tenant.name }}</p>
+                    <p><strong>رقم الهوية:</strong> {{ tenant.identity_number }}</p>
+                    <p><strong>الجوال:</strong> {{ tenant.phone }}</p>
+                </div>
+
+                <form method="post" enctype="multipart/form-data">
                     {% csrf_token %}
                     {% for field in form %}
                         <div class="mb-3">
@@ -28,19 +45,28 @@
                         </div>
                     {% endfor %}
                     <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-warning text-dark">
-                            <i class="bi bi-check-circle"></i> {% trans "التالي" %}
-                        </button>
-                        <a href="{% url 'home' %}" class="btn btn-outline-secondary">
-                            <i class="bi bi-x-circle"></i> {% trans "إلغاء" %}
-                        </a>
+                        <button type="submit" class="btn btn-warning">{% trans "التالي" %}</button>
+                        <a href="{% url 'add_tenant' %}" class="btn btn-outline-secondary">{% trans "تغيير المستأجر" %}</a>
+                        <a href="{% url 'home' %}" class="btn btn-outline-danger">{% trans "إلغاء" %}</a>
                     </div>
                 </form>
             </div>
         </div>
     </div>
 </div>
-
+<div class="alert alert-success">
+    <h5>معلومات المستأجر 
+        <a href="{% url 'edit_tenant' tenant.id %}?next={% url 'add_contract' %}" class="btn btn-sm btn-warning">
+            <i class="fas fa-edit"></i> تعديل
+        </a>
+        <a href="{% url 'delete_tenant' tenant.id %}?next={% url 'add_contract' %}" class="btn btn-sm btn-danger" onclick="return confirm('هل أنت متأكد من حذف هذا المستأجر؟')">
+            <i class="fas fa-trash"></i> حذف
+        </a>
+    </h5>
+    <p><strong>الاسم:</strong> {{ tenant.name }}</p>
+    <p><strong>رقم الهوية:</strong> {{ tenant.identity_number }}</p>
+    <p><strong>الجوال:</strong> {{ tenant.phone }}</p>
+</div>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         var hasTaxCheckbox = document.getElementById('id_has_tax');
@@ -53,39 +79,5 @@
             hasTaxCheckbox.addEventListener('change', toggleTaxRate);
         }
     });
-</script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const totalInput = document.getElementById('id_total_with_tax');
-    const taxCheckbox = document.getElementById('id_has_tax');
-    const taxRateInput = document.getElementById('id_tax_rate');
-    const rentAmountInput = document.getElementById('id_rent_amount');
-
-    function calculateRent() {
-        const total = parseFloat(totalInput.value) || 0;
-        if (taxCheckbox.checked) {
-            const taxRate = parseFloat(taxRateInput.value) || 0;
-            if (taxRate > 0) {
-                const rent = total / (1 + taxRate/100);
-                rentAmountInput.value = rent.toFixed(2);
-            } else {
-                rentAmountInput.value = total.toFixed(2);
-            }
-        } else {
-            rentAmountInput.value = total.toFixed(2);
-        }
-    }
-
-    totalInput.addEventListener('input', calculateRent);
-    taxCheckbox.addEventListener('change', calculateRent);
-    taxRateInput.addEventListener('input', calculateRent);
-
-    // إظهار/إخفاء حقل نسبة الضريبة
-    function toggleTaxRate() {
-        document.getElementById('id_tax_rate').parentNode.style.display = taxCheckbox.checked ? 'block' : 'none';
-    }
-    toggleTaxRate();
-    taxCheckbox.addEventListener('change', toggleTaxRate);
-});
 </script>
 {% endblock %}

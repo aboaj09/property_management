@@ -612,11 +612,11 @@ def normalize_arabic_numbers(text):
 @permission_required('rentals.change_tenant', raise_exception=True)
 def edit_tenant(request, pk):
     tenant = get_object_or_404(Tenant, pk=pk, is_deleted=False)
+    next_url = request.GET.get('next')  # قراءة معامل next من الرابط
     
     if request.method == 'POST':
         form = TenantForm(request.POST, request.FILES, instance=tenant)
         if form.is_valid():
-            # تطبيع رقم الهوية
             identity_number = normalize_arabic_numbers(form.cleaned_data['identity_number'])
             
             # التحقق من عدم وجود مستأجر آخر نشط بنفس الرقم
@@ -629,12 +629,17 @@ def edit_tenant(request, pk):
                 messages.error(request, _('رقم الهوية مستخدم مسبقاً من قبل مستأجر آخر.'))
                 return render(request, 'rentals/edit_tenant.html', {'form': form, 'tenant': tenant})
             
-            # تعيين الرقم الطبيعي للنموذج
             form.instance.identity_number = identity_number
             
             try:
                 form.save()
                 messages.success(request, _('تم تعديل بيانات المستأجر بنجاح.'))
+                
+                # إذا كان هناك next، عد إليه
+                if next_url:
+                    return redirect(next_url)
+                
+                # وإلا اذهب إلى صفحة الوحدة المرتبطة
                 contract = tenant.contracts.first()
                 if contract:
                     return redirect('unit_detail', pk=contract.unit.id)
@@ -727,6 +732,11 @@ def delete_unit(request, pk):
 @login_required
 @permission_required('rentals.delete_tenant', raise_exception=True)
 def delete_tenant(request, pk):
+    # قراءة next من الرابط
+    next_url = request.GET.get('next')
+    if request.method == 'POST':
+        next_url = request.POST.get('next')
+    
     try:
         tenant = Tenant.objects.get(pk=pk)
     except Tenant.DoesNotExist:
@@ -734,19 +744,24 @@ def delete_tenant(request, pk):
         return redirect('home')
     
     if request.method == 'POST':
-        # إذا كان للمستأجر عقد نشط، قم بإنهائه أولاً
+        # التحقق من عدم وجود عقد نشط
         active_contract = tenant.contracts.filter(is_active=True).first()
         if active_contract:
-            # يمكنك هنا إما إنهاء العقد أو تحذير المستخدم
             messages.warning(request, 'لا يمكن حذف مستأجر لديه عقد نشط. قم بإنهاء العقد أولاً.')
-            return redirect('unit_detail', pk=active_contract.unit.id)
+            return redirect(next_url) if next_url else redirect('home')
         
-        # تحديث الحالة إلى محذوف
+        # الحذف المنطقي
         Tenant.objects.filter(pk=pk).update(is_deleted=True)
         messages.success(request, 'تم حذف المستأجر بنجاح.')
-        return redirect('home')
+        
+        # إذا كان next يشير إلى add_contract، نزيل tenant_id من الجلسة ونتجه إلى add_tenant
+        if next_url and 'add_contract' in next_url:
+            request.session.pop('new_tenant_id', None)
+            return redirect('add_tenant')
+        
+        return redirect(next_url) if next_url else redirect('home')
     
-    return render(request, 'rentals/delete_confirm.html', {'object': tenant, 'type': 'tenant'})
+    return render(request, 'rentals/delete_confirm.html', {'object': tenant, 'type': 'tenant', 'next': next_url})
 
 @login_required
 @permission_required('rentals.delete_contract', raise_exception=True)
