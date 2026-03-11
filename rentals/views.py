@@ -727,12 +727,25 @@ def delete_unit(request, pk):
 @login_required
 @permission_required('rentals.delete_tenant', raise_exception=True)
 def delete_tenant(request, pk):
-    tenant = get_object_or_404(Tenant, pk=pk)
+    # التحقق من وجود المستأجر
+    try:
+        tenant = Tenant.objects.get(pk=pk)
+    except Tenant.DoesNotExist:
+        messages.error(request, 'المستأجر غير موجود.')
+        return redirect('home')
+    
     if request.method == 'POST':
-        tenant.is_deleted = True
-        Tenant.objects.filter(pk=pk).update(is_deleted=True)
-        messages.success(request, _('تم حذف المستأجر بنجاح.'))
-    return redirect('home')
+        # تحديث مباشر لقاعدة البيانات - هذه هي الطريقة الأسرع والأضمن
+        updated = Tenant.objects.filter(pk=pk).update(is_deleted=True)
+        
+        if updated:
+            messages.success(request, 'تم حذف المستأجر بنجاح.')
+        else:
+            messages.error(request, 'لم يتم العثور على المستأجر للحذف.')
+        
+        return redirect('home')
+    
+    # عرض صفحة التأكيد (طلب GET)
     return render(request, 'rentals/delete_confirm.html', {'object': tenant, 'type': 'tenant'})
 
 @login_required
