@@ -404,6 +404,7 @@ def add_tenant(request):
         if form.is_valid():
             identity_number = normalize_arabic_numbers(form.cleaned_data['identity_number'])
             
+            # التحقق من عدم وجود مستأجر نشط بنفس الرقم (فقط is_deleted=False)
             if Tenant.objects.filter(identity_number=identity_number, is_deleted=False).exists():
                 messages.error(request, _('رقم الهوية مستخدم مسبقاً من قبل مستأجر نشط.'))
                 return render(request, 'rentals/add_tenant.html', {'form': form})
