@@ -112,9 +112,9 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 # ============================================================
 # يجب تعيين هذه المتغيرات في بيئة التشغيل (Environment Variables)
 CLOUDINARY_STORAGE = {
-    'CLOUD_NAME': os.getenv('CLOUDINARY_CLOUD_NAME'),
-    'API_KEY': os.getenv('CLOUDINARY_API_KEY'),
-    'API_SECRET': os.getenv('CLOUDINARY_API_SECRET'),
+    'CLOUD_NAME': os.getenv('dzsipctqe'),
+    'API_KEY': os.getenv('484654375992933'),
+    'API_SECRET': os.getenv('0yNVYUP89D-YzYtX1kzgljM7N9E'),
 }
 
 # استخدام Cloudinary كمخزن افتراضي للملفات (Media files)
