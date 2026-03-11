@@ -727,22 +727,14 @@ def delete_unit(request, pk):
 @login_required
 @permission_required('rentals.delete_tenant', raise_exception=True)
 def delete_tenant(request, pk):
-    import traceback
-    try:
-        print(f"🔥 delete_tenant called with pk={pk}, method={request.method}")
-        tenant = get_object_or_404(Tenant, pk=pk)
-        if request.method == 'POST':
-            print(f"🔥 POST request - deleting tenant {tenant.id}")
-            Tenant.objects.filter(pk=pk).update(is_deleted=True)
-            print(f"🔥 Update executed, is_deleted should now be True")
-            messages.success(request, _('تم حذف المستأجر بنجاح.'))
-            return redirect('home')
-        return render(request, 'rentals/delete_confirm.html', {'object': tenant, 'type': 'tenant'})
-    except Exception as e:
-        print(f"🔥 ERROR: {e}")
-        traceback.print_exc()
-        messages.error(request, f"حدث خطأ: {e}")
-        return redirect('home')
+    tenant = get_object_or_404(Tenant, pk=pk)
+    if request.method == 'POST':
+        tenant.is_deleted = True
+        Tenant.objects.filter(pk=pk).update(is_deleted=True)
+        messages.success(request, _('تم حذف المستأجر بنجاح.'))
+    return redirect('home')
+    return render(request, 'rentals/delete_confirm.html', {'object': tenant, 'type': 'tenant'})
+
 @login_required
 @permission_required('rentals.delete_contract', raise_exception=True)
 def delete_contract(request, pk):
