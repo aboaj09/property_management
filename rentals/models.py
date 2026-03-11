@@ -111,6 +111,7 @@ class Tenant(models.Model):
         verbose_name = "مستأجر"
         verbose_name_plural = "المستأجرون"
         ordering = ['name']
+        unique_together = ['identity_number', 'is_deleted']
     def __str__(self):
         return f"{self.name} - {self.identity_number}"
 

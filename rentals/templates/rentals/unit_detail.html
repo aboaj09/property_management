@@ -113,4 +113,12 @@
     </div>
     {% endif %}
 </div>
+{% if current_contract %}
+    <div class="alert alert-info">
+        <p><strong>المستأجر الحالي:</strong> {{ current_contract.tenant.name }}</p>
+        <a href="{% url 'delete_tenant' current_contract.tenant.id %}" class="btn btn-danger btn-sm" onclick="return confirm('هل أنت متأكد من حذف هذا المستأجر؟ سيتم فصله من العقد الحالي.')">
+            <i class="fas fa-trash"></i> حذف المستأجر
+        </a>
+    </div>
+{% endif %}
 {% endblock %}
