@@ -13,4 +13,4 @@ cloudinary==1.36.0
 django-cloudinary-storage
 django-csp==3.8
 sqlparse==0.5.3
-typing_extensions==4.12.2
+typing_extensions==4.12.2psycopg2-binary==2.9.11
