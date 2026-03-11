@@ -9,32 +9,20 @@ from django.utils.translation import gettext_lazy as _
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# متغيرات البيئة
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-default-key')
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
-# ... باقي الإعدادات ...
-
-# السماح لنطاقات Vercel
+# النطاقات المسموح بها (أضف نطاق Vercel الخاص بك بعد النشر)
 ALLOWED_HOSTS = ['127.0.0.1', '.vercel.app', '.now.sh']
 
-# 🔴 تأكد من هذا السطر (يجب أن يشير إلى `app` في wsgi.py)
+# CSRF
+CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'https://*.vercel.app,https://*.now.sh').split(',')
+
+# WSGI
 WSGI_APPLICATION = 'property_management.wsgi.app'
 
-# إعدادات الملفات الثابتة (static)
-STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-
-# ملفات الوسائط (ملفات المستخدمين) - Vercel لا يدعمها محلياً!
-# إذا كنت تستخدم رفع الصور، ستحتاج Cloudinary أو خدمة تخزين خارجية
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
-# تأكد من أن DEBUG=False
-DEBUG = False
-
-CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'https://amar.up.railway.app,https://*.up.railway.app').split(',')
-
-# Application definition
+# التطبيقات
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -42,9 +30,14 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'rentals',  # تطبيق إدارة الإيجارات
+    # Cloudinary للتخزين
+    'cloudinary_storage',
+    'cloudinary',
+    # التطبيق الخاص
+    'rentals',
 ]
 
+# Middleware
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
@@ -76,9 +69,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'property_management.wsgi.application'
-
-# Database
+# قاعدة البيانات
 if os.getenv('DATABASE_URL'):
     DATABASES = {
         'default': dj_database_url.config(default=os.getenv('DATABASE_URL'))
@@ -91,7 +82,7 @@ else:
         }
     }
 
-# Password validation
+# التحقق من كلمة المرور
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
@@ -99,7 +90,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
-# Internationalization
+# اللغة والوقت
 LANGUAGE_CODE = 'ar'
 LANGUAGES = [
     ('ar', _('العربية')),
@@ -111,17 +102,26 @@ USE_I18N = True
 USE_L10N = True
 USE_TZ = True
 
-# Static files (CSS, JavaScript, Images)
+# الملفات الثابتة (Static files)
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# Media files (Uploaded files) - استخدام التخزين المحلي مؤقتاً
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+# ============================================================
+# إعدادات Cloudinary (للملفات المرفوعة)
+# ============================================================
+# يجب تعيين هذه المتغيرات في بيئة التشغيل (Environment Variables)
+CLOUDINARY_STORAGE = {
+    'CLOUD_NAME': os.getenv('CLOUDINARY_CLOUD_NAME'),
+    'API_KEY': os.getenv('CLOUDINARY_API_KEY'),
+    'API_SECRET': os.getenv('CLOUDINARY_API_SECRET'),
+}
 
-# Default primary key field type
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+# استخدام Cloudinary كمخزن افتراضي للملفات (Media files)
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+# يمكن إزالة أو تعليق MEDIA_URL و MEDIA_ROOT لأن Cloudinary سيتولى الأمر
+# MEDIA_URL = '/media/'
+# MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # ============================================================
 # إعدادات تسجيل الدخول والجلسة
@@ -145,7 +145,7 @@ if not DEBUG:
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
 
-# Content Security Policy (معدلة للسماح بالأيقونات)
+# Content Security Policy (CSP)
 CSP_DEFAULT_SRC = ("'self'",)
 CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'", "'unsafe-eval'", 
                   "cdn.jsdelivr.net", "fonts.googleapis.com", 
