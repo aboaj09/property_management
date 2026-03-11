@@ -729,12 +729,12 @@ def delete_unit(request, pk):
 def delete_tenant(request, pk):
     tenant = get_object_or_404(Tenant, pk=pk)
     if request.method == 'POST':
-        # بدلاً من الحذف الفعلي، نضع علامة كمحذوف
-        tenant.is_deleted = True
+        tenant.is_deleted = True   # هذا هو المهم
         tenant.save()
         messages.success(request, _('تم حذف المستأجر بنجاح.'))
         return redirect('home')
     return render(request, 'rentals/delete_confirm.html', {'object': tenant, 'type': 'tenant'})
+
 @login_required
 @permission_required('rentals.delete_contract', raise_exception=True)
 def delete_contract(request, pk):
