@@ -1,21 +1,6 @@
 from django.urls import path
 from . import views
-from django.contrib import admin
-from django.urls import path, include
-from django.conf import settings
-from django.conf.urls.static import static
 
-
-urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('i18n/', include('django.conf.urls.i18n')),
-    path('', include('rentals.urls')),
-    path('tenants/', views.tenant_list, name='tenant_list'),
-  
-]
-
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 urlpatterns = [
     # الصفحات العامة
     path('', views.home, name='home'),
@@ -59,8 +44,8 @@ urlpatterns = [
     path('delete/contract/<int:pk>/', views.delete_contract, name='delete_contract'),
     path('delete/payment/<int:pk>/', views.delete_payment, name='delete_payment'),
     path('delete/expense/<int:pk>/', views.delete_expense, name='delete_expense'),
-
-        # مسارات التقارير
+    
+    # مسارات التقارير الإضافية
     path('reports/', views.reports_dashboard, name='reports_dashboard'),
     path('reports/rent/', views.rent_report, name='rent_report'),
     path('reports/expense/', views.expense_report, name='expense_report'),
@@ -71,7 +56,11 @@ urlpatterns = [
     path('export/expense/excel/', views.export_expense_excel, name='export_expense_excel'),
     path('export/rent/pdf/', views.export_rent_pdf, name='export_rent_pdf'),
     path('export/expense/pdf/', views.export_expense_pdf, name='export_expense_pdf'),
-
-        path('search/', views.advanced_search, name='advanced_search'),
-        path('add/contract-for-unit/<int:unit_id>/', views.add_contract_for_unit, name='add_contract_for_unit'),
+    
+    # مسارات إضافية
+    path('search/', views.advanced_search, name='advanced_search'),
+    path('add/contract-for-unit/<int:unit_id>/', views.add_contract_for_unit, name='add_contract_for_unit'),
+    
+    # مسار قائمة المستأجرين (الجديد)
+    path('tenants/', views.tenant_list, name='tenant_list'),
 ]
