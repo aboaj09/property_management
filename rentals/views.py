@@ -390,8 +390,7 @@ def add_unit(request, subcategory_id):
             unit.save()
             messages.success(request, _('تم إضافة الوحدة بنجاح.'))
             request.session['new_unit_id'] = unit.id
-            # التوجيه إلى صفحة اختيار المستأجر بدلاً من add_tenant
-            return redirect('choose_tenant')
+            return redirect('choose_tenant')  # بدلاً من add_tenant
     else:
         form = UnitForm()
     return render(request, 'rentals/add_unit.html', {'form': form, 'subcategory': subcategory})
@@ -403,21 +402,17 @@ def add_tenant(request):
         form = TenantForm(request.POST, request.FILES)
         if form.is_valid():
             identity_number = normalize_arabic_numbers(form.cleaned_data['identity_number'])
-            
             if Tenant.objects.filter(identity_number=identity_number, is_deleted=False).exists():
-                messages.error(request, _('رقم الهوية مستخدم مسبقاً من قبل مستأجر نشط.'))
+                messages.error(request, _('رقم الهوية مستخدم مسبقاً.'))
                 return render(request, 'rentals/add_tenant.html', {'form': form})
             else:
                 form.instance.identity_number = identity_number
                 tenant = form.save()
-                
-                # إذا كان هناك new_unit_id في الجلسة، نذهب إلى choose_tenant
                 if request.session.get('new_unit_id'):
                     request.session['new_tenant_id'] = tenant.id
                     return redirect('choose_tenant')
                 else:
-                    # إذا لم يكن هناك وحدة مرتبطة، نذهب إلى قائمة المستأجرين
-                    messages.success(request, _('تم إضافة المستأجر بنجاح.'))
+                    messages.success(request, 'تم إضافة المستأجر بنجاح.')
                     return redirect('tenant_list')
     else:
         form = TenantForm()
@@ -426,18 +421,11 @@ def add_tenant(request):
 @login_required
 @permission_required('rentals.add_contract', raise_exception=True)
 def add_contract_for_unit(request, unit_id):
-    """بدء إضافة عقد لوحدة موجودة (غير مؤجرة)"""
     unit = get_object_or_404(Unit, pk=unit_id)
-    
-    # التحقق من أن الوحدة غير مؤجرة
     if unit.is_rented:
-        messages.warning(request, _('الوحدة مؤجرة حالياً. يجب إنهاء العقد الحالي أولاً.'))
+        messages.warning(request, 'الوحدة مؤجرة حالياً.')
         return redirect('unit_detail', pk=unit.id)
-    
-    # تخزين معرف الوحدة في الجلسة للاستخدام في الخطوات التالية
     request.session['new_unit_id'] = unit.id
-    
-    # التوجيه إلى صفحة اختيار مستأجر (جديدة)
     return redirect('choose_tenant')
 
 @login_required
@@ -932,28 +920,17 @@ def rent_report(request):
             end_date = date(year, month+1, 1) - timedelta(days=1)
         period_name = f"{get_month_name(month)} {year}"
     
-    # باقي الكود كما هو مع استخدام start_date و end_date
-    payments = Payment.objects.filter(
-        payment_date__gte=start_date,
-        payment_date__lte=end_date
-    ).select_related('contract__unit', 'contract__tenant')
-    
+    # ... باقي الكود كما هو مع استخدام start_date و end_date ...
+    payments = Payment.objects.filter(payment_date__gte=start_date, payment_date__lte=end_date)
     total_payments = payments.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
     
-    # حساب العقود النشطة يدوياً
     all_contracts = Contract.objects.filter(is_active=True)
-    active_contracts = []
+    expected_rent = 0
     for contract in all_contracts:
         contract_end = contract.start_date + relativedelta(months=contract.lease_duration_months) - timedelta(days=1)
         if contract.start_date <= end_date and contract_end >= start_date:
-            active_contracts.append(contract)
-    
-    expected_rent = 0
-    for contract in active_contracts:
-        contract_end = contract.start_date + relativedelta(months=contract.lease_duration_months) - timedelta(days=1)
-        overlap_start = max(contract.start_date, start_date)
-        overlap_end = min(contract_end, end_date)
-        if overlap_start <= overlap_end:
+            overlap_start = max(contract.start_date, start_date)
+            overlap_end = min(contract_end, end_date)
             months = (overlap_end.year - overlap_start.year) * 12 + (overlap_end.month - overlap_start.month) + 1
             expected_rent += contract.total_monthly_with_tax * months
     
