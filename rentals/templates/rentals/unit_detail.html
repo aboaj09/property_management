@@ -36,41 +36,50 @@
             </div>
         </div>
 
-       <td>
-    {% if current_contract %}
-<div class="card mb-3">
-    <div class="card-header bg-primary text-white">
-        <h5>العقد الحالي</h5>
+        <!-- معلومات العقد الحالي (إذا كان موجوداً) -->
+        {% if current_contract %}
+        <div class="col-md-6">
+            <div class="content-card">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0">العقد الحالي</h5>
+                    <div>
+                        <a href="{% url 'edit_contract' current_contract.id %}" class="btn btn-warning-custom btn-sm">
+                            <i class="fas fa-edit"></i> تعديل العقد
+                        </a>
+                        <a href="{% url 'delete_contract' current_contract.id %}" class="btn btn-danger-custom btn-sm">
+                            <i class="fas fa-trash"></i> إنهاء العقد
+                        </a>
+                    </div>
+                </div>
+                <p><strong>رقم العقد:</strong> {{ current_contract.contract_number }}</p>
+                <p><strong>المستأجر:</strong> {{ current_contract.tenant.name }}</p>
+                <p><strong>نوع الإيجار:</strong> 
+                    {% if current_contract.rent_type == 'yearly' %}سنوي{% else %}شهري{% endif %}
+                </p>
+                <p><strong>قيمة الإيجار:</strong> {{ current_contract.rent_amount|floatformat:2 }} 
+                    {% if current_contract.rent_type == 'yearly' %}ريال/سنة{% else %}ريال/شهر{% endif %}
+                </p>
+                <p><strong>الضريبة:</strong> {{ current_contract.tax_amount_monthly|floatformat:2 }} ريال/شهر (نسبة {{ current_contract.tax_rate }}%)</p>
+                <p><strong>الإجمالي مع الضريبة:</strong> {{ current_contract.total_monthly_with_tax|floatformat:2 }} ريال/شهر</p>
+                <p><strong>مدة العقد:</strong> {{ current_contract.lease_duration_months }} شهر</p>
+                <p><strong>إجمالي العقد:</strong> {{ current_contract.total_expected|floatformat:2 }} ريال</p>
+                <p><strong>المدفوع:</strong> {{ current_contract.total_paid|floatformat:2 }} ريال</p>
+                <p><strong>المتبقي:</strong> <span class="{% if current_contract.remaining > 0 %}text-danger{% else %}text-success{% endif %}">{{ current_contract.remaining|floatformat:2 }}</span> ريال</p>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-md-6">
+            <div class="alert alert-info text-center">
+                <i class="fas fa-info-circle"></i> هذه الوحدة شاغرة.
+                <a href="{% url 'add_contract_for_unit' unit.id %}" class="btn btn-primary btn-sm">
+                    <i class="fas fa-plus-circle"></i> إضافة عقد جديد
+                </a>
+            </div>
+        </div>
+        {% endif %}
     </div>
-    <div class="card-body">
-        <p><strong>رقم العقد:</strong> {{ current_contract.contract_number }}</p>
-        <p><strong>المستأجر:</strong> {{ current_contract.tenant.name }}</p>
-        <p><strong>نوع الإيجار:</strong> 
-            {% if current_contract.rent_type == 'yearly' %}سنوي{% else %}شهري{% endif %}
-        </p>
-        <p><strong>قيمة الإيجار:</strong> {{ current_contract.rent_amount|floatformat:2 }} 
-            {% if current_contract.rent_type == 'yearly' %}ريال/سنة{% else %}ريال/شهر{% endif %}
-        </p>
-        <p><strong>الضريبة:</strong> {{ current_contract.tax_amount_monthly|floatformat:2 }} ريال/شهر (نسبة {{ current_contract.tax_rate }}%)</p>
-        <p><strong>الإجمالي مع الضريبة:</strong> {{ current_contract.total_monthly_with_tax|floatformat:2 }} ريال/شهر</p>
-        <p><strong>مدة العقد:</strong> {{ current_contract.lease_duration_months }} شهر</p>
-        <p><strong>الدخل الإجمالي للعقد (شامل الضريبة):</strong> {{ current_contract.total_expected|floatformat:2 }} ريال</p>
-        <p><strong>الدخل المتوقع لهذه السنة:</strong> 
-            {# يمكن حسابها لاحقاً #}
-        </p>
-    </div>
-</div>
-{% endif %}
-</td>
-{% if not unit.is_rented %}
-<div class="alert alert-info text-center">
-    <i class="fas fa-info-circle"></i> هذه الوحدة شاغرة.
-    <a href="{% url 'add_contract_for_unit' unit.id %}" class="btn btn-primary btn-sm">
-        <i class="fas fa-plus-circle"></i> إضافة عقد جديد
-    </a>
-</div>
-{% endif %}
-    <!-- سجل الدفعات -->
+
+    <!-- إذا كان هناك عقد، نعرض سجل الدفعات -->
     {% if current_contract %}
     <div class="content-card mb-4">
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -118,12 +127,4 @@
     </div>
     {% endif %}
 </div>
-{% if current_contract %}
-    <div class="alert alert-info">
-        <p><strong>المستأجر الحالي:</strong> {{ current_contract.tenant.name }}</p>
-        <a href="{% url 'delete_tenant' current_contract.tenant.id %}" class="btn btn-danger btn-sm" onclick="return confirm('هل أنت متأكد من حذف هذا المستأجر؟ سيتم فصله من العقد الحالي.')">
-            <i class="fas fa-trash"></i> حذف المستأجر
-        </a>
-    </div>
-{% endif %}
 {% endblock %}
