@@ -10,6 +10,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('i18n/', include('django.conf.urls.i18n')),
     path('', include('rentals.urls')),
+    path('tenants/', views.tenant_list, name='tenant_list'),
+  
 ]
 
 if settings.DEBUG:

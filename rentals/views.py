@@ -769,10 +769,9 @@ def delete_tenant(request, pk):
     return render(request, 'rentals/delete_confirm.html', {'object': tenant, 'type': 'tenant', 'next': next_url})
 
 @login_required
-@permission_required('rentals.view_tenant', raise_exception=True)
+@permission_required('rentals.view_tenant', raise_exception=False)  # صلاحية المشاهدة
 def tenant_list(request):
-    """عرض جميع المستأجرين (النشطين والمحذوفين)"""
-    tenants = Tenant.objects.all().order_by('-is_deleted', 'name')
+    tenants = Tenant.objects.filter(is_deleted=False)  # نعرض فقط المستأجرين غير المحذوفين
     return render(request, 'rentals/tenant_list.html', {'tenants': tenants})
 
 @login_required

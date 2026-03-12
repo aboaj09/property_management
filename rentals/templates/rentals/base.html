@@ -372,10 +372,10 @@
                 </a>
             </li>
             <li>
-    <a href="{% url 'tenant_list' %}" {% if '/tenants/' in request.path %}class="active"{% endif %}>
-        <i class="fas fa-users"></i> المستأجرين
-    </a>
-</li>
+                <a href="{% url 'tenant_list' %}" {% if '/tenants/' in request.path %}class="active"{% endif %}>
+                    <i class="fas fa-users"></i> المستأجرين
+                </a>
+            </li>
             <li>
                 <a href="{% url 'advanced_search' %}" {% if '/search/' in request.path %}class="active"{% endif %}>
                     <i class="fas fa-search"></i> بحث متقدم
