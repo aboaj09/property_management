@@ -19,7 +19,6 @@ from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 from .models import MainCategory, SubCategory, Unit, Contract, Payment, Tenant, Expense
 from .forms import MainCategoryForm, SubCategoryForm, UnitForm, TenantForm, ContractForm, PaymentForm, ExpenseForm
-from django.conf import settings
 import arabic_reshaper
 from bidi.algorithm import get_display
 from reportlab.pdfbase import pdfmetrics
@@ -29,14 +28,63 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
-from django.db.models import Q
-from django.db.models import Sum
-from datetime import datetime, timedelta
-from dateutil.relativedelta import relativedelta
 
 # ============================================================
-# دوال مساعدة للضريبة الربعية
+# دوال مساعدة (يجب تعريفها قبل استخدامها)
 # ============================================================
+
+def normalize_arabic_numbers(text):
+    """تحويل الأرقام العربية (٠-٩) إلى أرقام إنجليزية (0-9)"""
+    if text:
+        text = str(text).strip()
+        arabic_numbers = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
+        text = text.translate(arabic_numbers)
+        persian_numbers = str.maketrans('۰۱۲۳۴۵۶۷۸۹', '0123456789')
+        text = text.translate(persian_numbers)
+    return text
+
+def get_payment_dates(contract, start_limit=None, end_limit=None):
+    """
+    توليد تواريخ الاستحقاق الفعلية للعقد ضمن نطاق تاريخي محدد.
+    """
+    effective_start = contract.start_date + timedelta(days=contract.grace_period_days)
+    contract_end = contract.start_date + relativedelta(months=contract.lease_duration_months) - timedelta(days=1)
+    interval_map = {'monthly': 1, 'quarterly': 3, 'half_yearly': 6, 'yearly': 12}
+    interval = interval_map.get(contract.payment_interval, 1)
+    dates = []
+    current = effective_start
+    while current <= contract_end:
+        if (start_limit is None or current >= start_limit) and (end_limit is None or current <= end_limit):
+            dates.append(current)
+        current += relativedelta(months=interval)
+    return dates
+
+def total_rent_due_up_to_date(contract, end_date):
+    """
+    حساب إجمالي الإيجار المستحق (شامل الضريبة) حتى تاريخ معين (end_date).
+    """
+    due_dates = get_payment_dates(contract, end_limit=end_date)
+    if not due_dates:
+        return 0
+    interval_map = {'monthly': 1, 'quarterly': 3, 'half_yearly': 6, 'yearly': 12}
+    months_per_payment = interval_map.get(contract.payment_interval, 1)
+    rent_per_payment = contract.total_monthly_with_tax * months_per_payment
+    return rent_per_payment * len(due_dates)
+
+def expected_rent_for_year(contract, year):
+    """
+    تحسب مجموع الإيجار الشهري (مع الضريبة) الذي يقع ضمن السنة المحددة.
+    """
+    start_of_year = date(year, 1, 1)
+    end_of_year = date(year, 12, 31)
+    effective_start = contract.start_date + timedelta(days=contract.grace_period_days)
+    contract_end = contract.start_date + relativedelta(months=contract.lease_duration_months) - timedelta(days=1)
+    if effective_start > end_of_year or contract_end < start_of_year:
+        return 0
+    overlap_start = max(effective_start, start_of_year)
+    overlap_end = min(contract_end, end_of_year)
+    months = (overlap_end.year - overlap_start.year) * 12 + (overlap_end.month - overlap_start.month) + 1
+    return contract.total_monthly_with_tax * months
 
 def get_quarter_dates(year, quarter):
     if quarter == 1:
@@ -59,33 +107,22 @@ def get_quarter_tax(year, quarter):
     start_date, end_date = get_quarter_dates(year, quarter)
     if not start_date:
         return {'due': 0, 'collected': 0}
-
-    # جلب جميع العقود النشطة
     all_contracts = Contract.objects.filter(is_active=True)
     tax_due = 0
-
     for contract in all_contracts:
-        # تاريخ بداية العقد الفعلي بعد فترة السماح
         effective_start = contract.start_date + timedelta(days=contract.grace_period_days)
         contract_end = contract.start_date + relativedelta(months=contract.lease_duration_months) - timedelta(days=1)
-
-        # إذا كان العقد لا يتداخل مع الربع، نتخطاه
         if effective_start > end_date or contract_end < start_date:
             continue
-
-        # حساب أشهر التداخل
         overlap_start = max(effective_start, start_date)
         overlap_end = min(contract_end, end_date)
         months = (overlap_end.year - overlap_start.year) * 12 + (overlap_end.month - overlap_start.month) + 1
         tax_due += contract.tax_amount_monthly * months
-
-    # الضريبة المحصلة من الدفعات
     payments = Payment.objects.filter(payment_date__gte=start_date, payment_date__lte=end_date)
     tax_collected = 0
     for payment in payments:
         if payment.contract.has_tax:
             tax_collected += payment.amount_paid * (payment.contract.tax_rate / 100) / (1 + payment.contract.tax_rate/100)
-
     return {'due': round(tax_due, 2), 'collected': round(tax_collected, 2)}
 
 # ============================================================
@@ -124,35 +161,29 @@ def register_view(request):
 # دوال محمية (يجب تسجيل الدخول)
 # ============================================================
 
-
 @login_required
 def home(request):
     current_year = datetime.now().year
     current_month = datetime.now().month
     today = date.today()
-    end_of_year = date(current_year, 12, 31)  # نهاية السنة الحالية
+    end_of_year = date(current_year, 12, 31)
 
-    # إحصائيات عامة
     total_categories = MainCategory.objects.count()
     total_units = Unit.objects.count()
     rented_units = Unit.objects.filter(is_rented=True).count()
-    
     contracts = Contract.objects.filter(is_active=True)
-    
-    # ===== المستحق حتى نهاية السنة =====
+
     total_expected = 0
     for contract in contracts:
         total_expected += total_rent_due_up_to_date(contract, end_of_year)
-    
-    # ===== المستحق حتى اليوم (للمتبقي) =====
+
     total_rent_due_today = 0
     for contract in contracts:
         total_rent_due_today += total_rent_due_up_to_date(contract, today)
-    
+
     total_paid = Payment.objects.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
     total_remaining = total_rent_due_today - total_paid
-    
-    # الضريبة (كما هي)
+
     total_tax_due = 0
     total_tax_collected = 0
     quarters = []
@@ -165,49 +196,46 @@ def home(request):
         })
         total_tax_due += tax_data['due']
         total_tax_collected += tax_data['collected']
-    
+
     expenses_refundable = Expense.objects.filter(tax_refundable=True)
     total_tax_refunded = 0
     for exp in expenses_refundable:
         total_tax_refunded += exp.tax_amount
     net_tax = total_tax_due - total_tax_refunded
-        
-    # بيانات الأقسام الفرعية
+
     subcategories = SubCategory.objects.filter(is_active=True).prefetch_related('units', 'expenses')
     subcategories_data = []
     for sub in subcategories:
         units_count = sub.units.count()
         rented_count = sub.units.filter(is_rented=True).count()
         contracts_sub = Contract.objects.filter(unit__sub_category=sub, is_active=True)
-        
-        # المستحق حتى نهاية السنة لهذا القسم
+
         expected_sub = 0
         for contract in contracts_sub:
             expected_sub += total_rent_due_up_to_date(contract, end_of_year)
-        
-        # المستحق حتى اليوم لهذا القسم
+
         due_today_sub = 0
         for contract in contracts_sub:
             due_today_sub += total_rent_due_up_to_date(contract, today)
-        
+
         paid_sub = Payment.objects.filter(contract__unit__sub_category=sub).aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
         total_expense = sub.total_expenses()
         refundable_tax = sub.total_refundable_tax()
-        
+
         subcategories_data.append({
             'id': sub.id,
             'name': sub.name,
             'main_category': sub.main_category.name,
             'units_count': units_count,
             'rented_count': rented_count,
-            'total_rent_expected': expected_sub,          # المستحق حتى نهاية السنة
+            'total_rent_expected': expected_sub,
             'total_expense': total_expense,
             'refundable_tax': refundable_tax,
-            'total_paid': paid_sub,          
-            'total_remaining': due_today_sub - paid_sub,  # المتبقي حتى اليوم
+            'total_paid': paid_sub,
+            'total_remaining': due_today_sub - paid_sub,
         })
-    
-    # باقي الكود (الرسوم البيانية) كما هو...
+
+    # الرسوم البيانية
     monthly_labels = []
     monthly_income = []
     for i in range(5, -1, -1):
@@ -221,38 +249,36 @@ def home(request):
             end_date = date(year+1, 1, 1) - timedelta(days=1)
         else:
             end_date = date(year, month+1, 1) - timedelta(days=1)
-        
         month_payments = Payment.objects.filter(
             payment_date__gte=start_date,
             payment_date__lte=end_date
         ).aggregate(total=Sum('amount_paid'))['total'] or 0
-        
         monthly_labels.append(f"{month}/{year}")
         monthly_income.append(float(month_payments))
-    
+
     expenses_by_sub = Expense.objects.values('sub_category__name').annotate(
         total=Sum('amount')
     ).order_by('-total')[:5]
     expense_categories = [item['sub_category__name'] for item in expenses_by_sub]
     expense_amounts = [float(item['total']) for item in expenses_by_sub]
-    
+
     current_start = date(current_year, current_month, 1)
     if current_month == 12:
         current_end = date(current_year+1, 1, 1) - timedelta(days=1)
     else:
         current_end = date(current_year, current_month+1, 1) - timedelta(days=1)
-    
+
     current_expected = 0
     for contract in contracts:
         contract_end = contract.start_date + relativedelta(months=contract.lease_duration_months) - timedelta(days=1)
         if contract.start_date <= current_end and contract_end >= current_start:
             current_expected += contract.total_monthly_with_tax
-    
+
     current_paid = Payment.objects.filter(
         payment_date__gte=current_start,
         payment_date__lte=current_end
     ).aggregate(total=Sum('amount_paid'))['total'] or 0
-    
+
     context = {
         'total_categories': total_categories,
         'total_units': total_units,
@@ -277,19 +303,21 @@ def home(request):
     return render(request, 'rentals/home.html', context)
 
 @login_required
+def main_categories(request):
+    categories = MainCategory.objects.all()
+    return render(request, 'rentals/main_categories.html', {'categories': categories})
+
+@login_required
 def main_category_detail(request, pk):
     category = get_object_or_404(MainCategory, pk=pk)
     subcategories = category.subcategories.all()
-    
     units_count = Unit.objects.filter(sub_category__main_category=category).count()
     rented_count = Unit.objects.filter(sub_category__main_category=category, is_rented=True).count()
-    
     contracts = Contract.objects.filter(
         unit__sub_category__main_category=category,
         is_active=True
     )
     total_expected = sum(c.total_expected for c in contracts)
-    
     context = {
         'category': category,
         'subcategories': subcategories,
@@ -304,23 +332,14 @@ def subcategory_detail(request, pk):
     subcategory = get_object_or_404(SubCategory, pk=pk)
     units = subcategory.units.all()
     rented_units = units.filter(is_rented=True).count()
-    
-    # العقود النشطة في هذا القسم
     contracts_sub = Contract.objects.filter(unit__sub_category=subcategory, is_active=True)
-    
-    # حساب الإيرادات المتوقعة للسنة الحالية فقط
     current_year = datetime.now().year
     total_expected = 0
     for contract in contracts_sub:
         total_expected += expected_rent_for_year(contract, current_year)
-    
-    # إجمالي المدفوعات (قد يكون من سنوات سابقة، نتركه كما هو أو نحصره بالسنة حسب الرغبة)
     total_paid = Payment.objects.filter(contract__unit__sub_category=subcategory).aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
-    
-    # إجمالي المصاريف والضريبة المستردة (كما هي)
     total_expense = subcategory.total_expenses()
     refundable_tax = subcategory.total_refundable_tax()
-    
     context = {
         'subcategory': subcategory,
         'units': units,
@@ -339,7 +358,6 @@ def unit_detail(request, pk):
     payments = []
     if current_contract:
         payments = current_contract.payments.all().order_by('-payment_date')
-    
     context = {
         'unit': unit,
         'current_contract': current_contract,
@@ -350,8 +368,20 @@ def unit_detail(request, pk):
 @login_required
 def add_unit_flow(request):
     categories = MainCategory.objects.all()
-    # لا حاجة لتخزين أي شيء في الجلسة هنا، لأن الخطوة القادمة هي اختيار الفئة
     return render(request, 'rentals/add_unit_flow.html', {'categories': categories})
+
+@login_required
+@permission_required('rentals.add_maincategory', raise_exception=True)
+def add_main_category(request):
+    if request.method == 'POST':
+        form = MainCategoryForm(request.POST)
+        if form.is_valid():
+            category = form.save()
+            messages.success(request, _('تم إضافة الفئة الرئيسية بنجاح.'))
+            return redirect('choose_subcategory', category_id=category.id)
+    else:
+        form = MainCategoryForm()
+    return render(request, 'rentals/add_main_category.html', {'form': form})
 
 @login_required
 def choose_subcategory(request, category_id):
@@ -395,11 +425,11 @@ def add_unit(request, subcategory_id):
             unit.save()
             messages.success(request, _('تم إضافة الوحدة بنجاح.'))
             request.session['new_unit_id'] = unit.id
-            # التوجيه إلى صفحة اختيار المستأجر بدلاً من add_tenant
             return redirect('choose_tenant')
     else:
         form = UnitForm()
     return render(request, 'rentals/add_unit.html', {'form': form, 'subcategory': subcategory})
+
 @login_required
 @permission_required('rentals.add_tenant', raise_exception=True)
 def add_tenant(request):
@@ -407,20 +437,16 @@ def add_tenant(request):
         form = TenantForm(request.POST, request.FILES)
         if form.is_valid():
             identity_number = normalize_arabic_numbers(form.cleaned_data['identity_number'])
-            
             if Tenant.objects.filter(identity_number=identity_number, is_deleted=False).exists():
                 messages.error(request, _('رقم الهوية مستخدم مسبقاً من قبل مستأجر نشط.'))
                 return render(request, 'rentals/add_tenant.html', {'form': form})
             else:
                 form.instance.identity_number = identity_number
                 tenant = form.save()
-                
-                # إذا كان هناك new_unit_id في الجلسة، نذهب إلى choose_tenant
                 if request.session.get('new_unit_id'):
                     request.session['new_tenant_id'] = tenant.id
                     return redirect('choose_tenant')
                 else:
-                    # إذا لم يكن هناك وحدة مرتبطة، نذهب إلى قائمة المستأجرين
                     messages.success(request, _('تم إضافة المستأجر بنجاح.'))
                     return redirect('tenant_list')
     else:
@@ -440,21 +466,15 @@ def add_contract_for_unit(request, unit_id):
 @login_required
 @permission_required('rentals.add_contract', raise_exception=True)
 def add_contract(request):
-    # محاولة الحصول على tenant_id من الرابط أولاً (إذا تم اختيار مستأجر من صفحة أخرى)
     tenant_id = request.GET.get('tenant_id')
     unit_id = request.session.get('new_unit_id')
-    
-    # إذا لم يكن هناك tenant_id من الرابط، نحاول من الجلسة
     if not tenant_id:
         tenant_id = request.session.get('new_tenant_id')
-    
     if not unit_id or not tenant_id:
         messages.error(request, _('الرجاء البدء من البداية.'))
         return redirect('home')
-    
     unit = get_object_or_404(Unit, pk=unit_id)
     tenant = get_object_or_404(Tenant, pk=tenant_id)
-    
     if request.method == 'POST':
         form = ContractForm(request.POST, request.FILES)
         if form.is_valid():
@@ -469,72 +489,7 @@ def add_contract(request):
             return redirect('add_payment')
     else:
         form = ContractForm()
-    
     return render(request, 'rentals/add_contract.html', {'form': form, 'unit': unit, 'tenant': tenant})
-
-def total_rent_due_up_to_date(contract, end_date):
-    """
-    حساب إجمالي الإيجار المستحق (شامل الضريبة) حتى تاريخ معين (end_date).
-    """
-    due_dates = get_payment_dates(contract, end_limit=end_date)
-    if not due_dates:
-        return 0
-    interval_map = {'monthly': 1, 'quarterly': 3, 'half_yearly': 6, 'yearly': 12}
-    months_per_payment = interval_map.get(contract.payment_interval, 1)
-    rent_per_payment = contract.total_monthly_with_tax * months_per_payment
-    return rent_per_payment * len(due_dates)
-
-def get_payment_dates(contract, start_limit=None, end_limit=None):
-    """
-    توليد تواريخ الاستحقاق الفعلية للعقد ضمن نطاق تاريخي محدد.
-    """
-    effective_start = contract.start_date + timedelta(days=contract.grace_period_days)
-    contract_end = contract.start_date + relativedelta(months=contract.lease_duration_months) - timedelta(days=1)
-    interval_map = {'monthly': 1, 'quarterly': 3, 'half_yearly': 6, 'yearly': 12}
-    interval = interval_map.get(contract.payment_interval, 1)
-    
-    dates = []
-    current = effective_start
-    while current <= contract_end:
-        if (start_limit is None or current >= start_limit) and (end_limit is None or current <= end_limit):
-            dates.append(current)
-        current += relativedelta(months=interval)
-    return dates
-
-def expected_rent_for_year(contract, year):
-    """
-    تحسب مجموع الإيجار الشهري (مع الضريبة) الذي يقع ضمن السنة المحددة.
-    """
-    start_of_year = date(year, 1, 1)
-    end_of_year = date(year, 12, 31)
-
-    # تاريخ بداية العقد الفعلي (بعد السماح)
-    effective_start = contract.start_date + timedelta(days=contract.grace_period_days)
-    contract_end = contract.start_date + relativedelta(months=contract.lease_duration_months) - timedelta(days=1)
-
-    # إذا العقد لا يغطي السنة إطلاقاً
-    if effective_start > end_of_year or contract_end < start_of_year:
-        return 0
-
-    # حساب فترة التداخل
-    overlap_start = max(effective_start, start_of_year)
-    overlap_end = min(contract_end, end_of_year)
-    months = (overlap_end.year - overlap_start.year) * 12 + (overlap_end.month - overlap_start.month) + 1
-
-    return contract.total_monthly_with_tax * months
-
-@login_required
-@permission_required('rentals.add_maincategory', raise_exception=True)
-def add_main_category(request):
-    if request.method == 'POST':
-        form = MainCategoryForm(request.POST)
-        if form.is_valid():
-            category = form.save()
-            messages.success(request, _('تم إضافة الفئة الرئيسية بنجاح.'))
-            return redirect('choose_subcategory', category_id=category.id)
-    else:
-        form = MainCategoryForm()
-    return render(request, 'rentals/add_main_category.html', {'form': form})
 
 @login_required
 @permission_required('rentals.add_payment', raise_exception=True)
@@ -584,10 +539,8 @@ def add_expense(request, subcategory_id):
         form = ExpenseForm(initial={'date': date.today()})
     return render(request, 'rentals/add_expense.html', {'form': form, 'subcategory': subcategory})
 
-
-
 @login_required
-@permission_required('rentals.view_expense', raise_exception=False)  # للعرض فقط
+@permission_required('rentals.view_expense', raise_exception=False)
 def profit_loss_report(request):
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
@@ -671,53 +624,28 @@ def edit_unit(request, pk):
         form = UnitForm(instance=unit)
     return render(request, 'rentals/edit_unit.html', {'form': form, 'unit': unit})
 
-from django.db import IntegrityError
-import unicodedata
-
-def normalize_arabic_numbers(text):
-    """تحويل الأرقام العربية (٠-٩) إلى أرقام إنجليزية (0-9)"""
-    if text:
-        text = str(text).strip()
-        # تحويل الأرقام العربية إلى إنجليزية
-        arabic_numbers = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
-        text = text.translate(arabic_numbers)
-        # تحويل الأرقام الفارسية/العربية الأخرى
-        persian_numbers = str.maketrans('۰۱۲۳۴۵۶۷۸۹', '0123456789')
-        text = text.translate(persian_numbers)
-    return text
-
 @login_required
 @permission_required('rentals.change_tenant', raise_exception=True)
 def edit_tenant(request, pk):
     tenant = get_object_or_404(Tenant, pk=pk, is_deleted=False)
-    next_url = request.GET.get('next')  # قراءة معامل next من الرابط
-    
+    next_url = request.GET.get('next')
     if request.method == 'POST':
         form = TenantForm(request.POST, request.FILES, instance=tenant)
         if form.is_valid():
             identity_number = normalize_arabic_numbers(form.cleaned_data['identity_number'])
-            
-            # التحقق من عدم وجود مستأجر آخر نشط بنفس الرقم
             existing = Tenant.objects.filter(
-                identity_number=identity_number, 
+                identity_number=identity_number,
                 is_deleted=False
             ).exclude(pk=pk)
-            
             if existing.exists():
                 messages.error(request, _('رقم الهوية مستخدم مسبقاً من قبل مستأجر آخر.'))
                 return render(request, 'rentals/edit_tenant.html', {'form': form, 'tenant': tenant})
-            
             form.instance.identity_number = identity_number
-            
             try:
                 form.save()
                 messages.success(request, _('تم تعديل بيانات المستأجر بنجاح.'))
-                
-                # إذا كان هناك next، عد إليه
                 if next_url:
                     return redirect(next_url)
-                
-                # وإلا اذهب إلى صفحة الوحدة المرتبطة
                 contract = tenant.contracts.first()
                 if contract:
                     return redirect('unit_detail', pk=contract.unit.id)
@@ -727,8 +655,8 @@ def edit_tenant(request, pk):
                 return render(request, 'rentals/edit_tenant.html', {'form': form, 'tenant': tenant})
     else:
         form = TenantForm(instance=tenant)
-    
     return render(request, 'rentals/edit_tenant.html', {'form': form, 'tenant': tenant})
+
 @login_required
 @permission_required('rentals.change_contract', raise_exception=True)
 def edit_contract(request, pk):
@@ -810,42 +738,26 @@ def delete_unit(request, pk):
 @login_required
 @permission_required('rentals.delete_tenant', raise_exception=True)
 def delete_tenant(request, pk):
-    # قراءة next من الرابط
     next_url = request.GET.get('next')
     if request.method == 'POST':
         next_url = request.POST.get('next')
-    
     try:
         tenant = Tenant.objects.get(pk=pk)
     except Tenant.DoesNotExist:
         messages.error(request, 'المستأجر غير موجود.')
         return redirect('home')
-    
     if request.method == 'POST':
-        # التحقق من عدم وجود عقد نشط
         active_contract = tenant.contracts.filter(is_active=True).first()
         if active_contract:
             messages.warning(request, 'لا يمكن حذف مستأجر لديه عقد نشط. قم بإنهاء العقد أولاً.')
             return redirect(next_url) if next_url else redirect('home')
-        
-        # الحذف المنطقي
         Tenant.objects.filter(pk=pk).update(is_deleted=True)
         messages.success(request, 'تم حذف المستأجر بنجاح.')
-        
-        # إذا كان next يشير إلى add_contract، نزيل tenant_id من الجلسة ونتجه إلى add_tenant
         if next_url and 'add_contract' in next_url:
             request.session.pop('new_tenant_id', None)
             return redirect('add_tenant')
-        
         return redirect(next_url) if next_url else redirect('home')
-    
     return render(request, 'rentals/delete_confirm.html', {'object': tenant, 'type': 'tenant', 'next': next_url})
-
-@login_required
-@permission_required('rentals.view_tenant', raise_exception=False)  # صلاحية المشاهدة
-def tenant_list(request):
-    tenants = Tenant.objects.filter(is_deleted=False)  # نعرض فقط المستأجرين غير المحذوفين
-    return render(request, 'rentals/tenant_list.html', {'tenants': tenants})
 
 @login_required
 @permission_required('rentals.delete_contract', raise_exception=True)
@@ -863,16 +775,12 @@ def delete_contract(request, pk):
 
 @login_required
 def choose_tenant(request):
-    """صفحة اختيار مستأجر لإضافة عقد لوحدة محددة مسبقاً"""
-    # التأكد من وجود unit_id في الجلسة
     unit_id = request.session.get('new_unit_id')
     if not unit_id:
         messages.error(request, 'الرجاء البدء من البداية.')
         return redirect('home')
-    
     tenants = Tenant.objects.filter(is_deleted=False).order_by('name')
     return render(request, 'rentals/choose_tenant.html', {'tenants': tenants})
-
 
 @login_required
 @permission_required('rentals.delete_payment', raise_exception=True)
@@ -896,38 +804,39 @@ def delete_expense(request, pk):
         return redirect('subcategory_detail', pk=sub_id)
     return render(request, 'rentals/delete_confirm.html', {'object': expense, 'type': 'expense'})
 
-
+@login_required
+@permission_required('rentals.view_tenant', raise_exception=False)
+def tenant_list(request):
+    tenants = Tenant.objects.filter(is_deleted=False)
+    return render(request, 'rentals/tenant_list.html', {'tenants': tenants})
 
 # ============================================================
-# دوال مساعدة للتقارير
+# دوال مساعدة للتقارير (PDF, Excel, إلخ)
 # ============================================================
 
 def prepare_arabic_text(text):
-    """تجهيز النص العربي للعرض في PDF"""
     if text:
         reshaped_text = arabic_reshaper.reshape(str(text))
         return get_display(reshaped_text)
     return ""
 
 def get_month_name(month_number):
-    """إرجاع اسم الشهر بالعربية"""
     months = {
         1: 'يناير', 2: 'فبراير', 3: 'مارس', 4: 'إبريل',
         5: 'مايو', 6: 'يونيو', 7: 'يوليو', 8: 'أغسطس',
         9: 'سبتمبر', 10: 'أكتوبر', 11: 'نوفمبر', 12: 'ديسمبر'
     }
     return months.get(month_number, '')
+
 # ============================================================
 # صفحة التقارير الرئيسية
 # ============================================================
 
 @login_required
 def reports_dashboard(request):
-    """الصفحة الرئيسية للتقارير"""
     current_year = datetime.now().year
     years = range(current_year - 5, current_year + 1)
     months = range(1, 13)
-    
     context = {
         'years': years,
         'months': months,
@@ -945,7 +854,6 @@ def rent_report(request):
     report_type = request.GET.get('report_type', 'monthly')
     year = int(request.GET.get('year', datetime.now().year))
     month = int(request.GET.get('month', datetime.now().month))
-    
     if report_type == 'yearly':
         start_date = date(year, 1, 1)
         end_date = date(year, 12, 31)
@@ -957,15 +865,8 @@ def rent_report(request):
         else:
             end_date = date(year, month+1, 1) - timedelta(days=1)
         period_name = f"{get_month_name(month)} {year}"
-    
-    payments = Payment.objects.filter(
-        payment_date__gte=start_date,
-        payment_date__lte=end_date
-    ).select_related('contract__unit', 'contract__tenant')
-    
+    payments = Payment.objects.filter(payment_date__gte=start_date, payment_date__lte=end_date).select_related('contract__unit', 'contract__tenant')
     total_payments = payments.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
-    
-    # حساب الإيجار المتوقع
     all_contracts = Contract.objects.filter(is_active=True)
     expected_rent = 0
     for contract in all_contracts:
@@ -975,7 +876,6 @@ def rent_report(request):
             overlap_end = min(contract_end, end_date)
             months = (overlap_end.year - overlap_start.year) * 12 + (overlap_end.month - overlap_start.month) + 1
             expected_rent += contract.total_monthly_with_tax * months
-    
     context = {
         'report_type': report_type,
         'year': year,
@@ -1000,7 +900,6 @@ def expense_report(request):
     report_type = request.GET.get('report_type', 'monthly')
     year = int(request.GET.get('year', datetime.now().year))
     month = int(request.GET.get('month', datetime.now().month))
-    
     if report_type == 'yearly':
         start_date = date(year, 1, 1)
         end_date = date(year, 12, 31)
@@ -1012,15 +911,9 @@ def expense_report(request):
         else:
             end_date = date(year, month+1, 1) - timedelta(days=1)
         period_name = f"{get_month_name(month)} {year}"
-    
-    expenses = Expense.objects.filter(
-        date__gte=start_date,
-        date__lte=end_date
-    ).select_related('sub_category')
-    
+    expenses = Expense.objects.filter(date__gte=start_date, date__lte=end_date).select_related('sub_category')
     total_expense = expenses.aggregate(Sum('amount'))['amount__sum'] or 0
     total_refundable_tax = sum(exp.tax_amount for exp in expenses if exp.tax_refundable)
-    
     context = {
         'report_type': report_type,
         'year': year,
@@ -1046,7 +939,6 @@ def tax_report(request):
     year = int(request.GET.get('year', datetime.now().year))
     month = int(request.GET.get('month', datetime.now().month))
     quarter = int(request.GET.get('quarter', 1))
-    
     if report_type == 'yearly':
         start_date = date(year, 1, 1)
         end_date = date(year, 12, 31)
@@ -1072,8 +964,6 @@ def tax_report(request):
         else:
             end_date = date(year, month+1, 1) - timedelta(days=1)
         period_name = f"{get_month_name(month)} {year}"
-    
-    # الضريبة المستحقة
     all_contracts = Contract.objects.filter(is_active=True)
     tax_due = 0
     for contract in all_contracts:
@@ -1083,18 +973,13 @@ def tax_report(request):
             overlap_end = min(contract_end, end_date)
             months = (overlap_end.year - overlap_start.year) * 12 + (overlap_end.month - overlap_start.month) + 1
             tax_due += contract.tax_amount_monthly * months
-    
-    # الضريبة المحصلة
     payments = Payment.objects.filter(payment_date__gte=start_date, payment_date__lte=end_date)
     tax_collected = 0
     for p in payments:
         if p.contract.has_tax:
             tax_collected += p.amount_paid * (p.contract.tax_rate/100) / (1 + p.contract.tax_rate/100)
-    
-    # الضريبة المستردة
     expenses = Expense.objects.filter(date__gte=start_date, date__lte=end_date, tax_refundable=True)
     tax_refunded = sum(exp.tax_amount for exp in expenses)
-    
     context = {
         'report_type': report_type,
         'year': year,
@@ -1116,25 +1001,17 @@ def tax_report(request):
 
 @login_required
 def export_rent_excel(request):
-    """تصدير تقرير الإيجارات إلى Excel"""
     year = int(request.GET.get('year', datetime.now().year))
     month = int(request.GET.get('month', datetime.now().month))
-    
     start_date = date(year, month, 1)
     if month == 12:
         end_date = date(year+1, 1, 1) - timedelta(days=1)
     else:
         end_date = date(year, month+1, 1) - timedelta(days=1)
-    
-    payments = Payment.objects.filter(
-        payment_date__gte=start_date,
-        payment_date__lte=end_date
-    ).select_related('contract__unit', 'contract__tenant')
-    
+    payments = Payment.objects.filter(payment_date__gte=start_date, payment_date__lte=end_date).select_related('contract__unit', 'contract__tenant')
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = f"تقرير إيجارات {get_month_name(month)} {year}"
-    
     headers = ['التاريخ', 'رقم العقد', 'الوحدة', 'المستأجر', 'المبلغ', 'طريقة الدفع', 'ملاحظات']
     for col_num, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col_num)
@@ -1143,7 +1020,6 @@ def export_rent_excel(request):
         cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
         cell.font = Font(color="FFFFFF", bold=True)
         cell.alignment = Alignment(horizontal='center')
-    
     for row_num, payment in enumerate(payments, 2):
         ws.cell(row=row_num, column=1).value = payment.payment_date
         ws.cell(row=row_num, column=2).value = payment.contract.contract_number
@@ -1152,11 +1028,9 @@ def export_rent_excel(request):
         ws.cell(row=row_num, column=5).value = float(payment.amount_paid)
         ws.cell(row=row_num, column=6).value = payment.get_payment_method_display()
         ws.cell(row=row_num, column=7).value = payment.notes
-    
     for col_num in range(1, 8):
         column_letter = get_column_letter(col_num)
         ws.column_dimensions[column_letter].width = 15
-    
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = f'attachment; filename="rent_report_{year}_{month}.xlsx"'
     wb.save(response)
@@ -1164,25 +1038,17 @@ def export_rent_excel(request):
 
 @login_required
 def export_expense_excel(request):
-    """تصدير تقرير المصاريف إلى Excel"""
     year = int(request.GET.get('year', datetime.now().year))
     month = int(request.GET.get('month', datetime.now().month))
-    
     start_date = date(year, month, 1)
     if month == 12:
         end_date = date(year+1, 1, 1) - timedelta(days=1)
     else:
         end_date = date(year, month+1, 1) - timedelta(days=1)
-    
-    expenses = Expense.objects.filter(
-        date__gte=start_date,
-        date__lte=end_date
-    ).select_related('sub_category')
-    
+    expenses = Expense.objects.filter(date__gte=start_date, date__lte=end_date).select_related('sub_category')
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = f"تقرير مصاريف {get_month_name(month)} {year}"
-    
     headers = ['التاريخ', 'القسم', 'البيان', 'المبلغ', 'ضريبة مستردة', 'ملاحظات']
     for col_num, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col_num)
@@ -1191,7 +1057,6 @@ def export_expense_excel(request):
         cell.fill = PatternFill(start_color="C00000", end_color="C00000", fill_type="solid")
         cell.font = Font(color="FFFFFF", bold=True)
         cell.alignment = Alignment(horizontal='center')
-    
     for row_num, exp in enumerate(expenses, 2):
         ws.cell(row=row_num, column=1).value = exp.date
         ws.cell(row=row_num, column=2).value = exp.sub_category.name
@@ -1199,11 +1064,9 @@ def export_expense_excel(request):
         ws.cell(row=row_num, column=4).value = float(exp.amount)
         ws.cell(row=row_num, column=5).value = float(exp.tax_amount) if exp.tax_refundable else 0
         ws.cell(row=row_num, column=6).value = exp.notes
-    
     for col_num in range(1, 7):
         column_letter = get_column_letter(col_num)
         ws.column_dimensions[column_letter].width = 15
-    
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = f'attachment; filename="expense_report_{year}_{month}.xlsx"'
     wb.save(response)
@@ -1215,29 +1078,21 @@ def export_expense_excel(request):
 
 @login_required
 def export_rent_pdf(request):
-    """تصدير تقرير الإيجارات إلى PDF"""
     year = int(request.GET.get('year', datetime.now().year))
     month = int(request.GET.get('month', datetime.now().month))
-    
     start_date = date(year, month, 1)
     if month == 12:
         end_date = date(year+1, 1, 1) - timedelta(days=1)
     else:
         end_date = date(year, month+1, 1) - timedelta(days=1)
-    
-    payments = Payment.objects.filter(
-        payment_date__gte=start_date,
-        payment_date__lte=end_date
-    ).select_related('contract__unit', 'contract__tenant')
-    
+    payments = Payment.objects.filter(payment_date__gte=start_date, payment_date__lte=end_date).select_related('contract__unit', 'contract__tenant')
     total_payments = payments.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
 
-    # ------------------- البحث عن خط عربي -------------------
     possible_paths = [
-        '/Library/Fonts/Arial.ttf',                          # macOS
-        '/System/Library/Fonts/Supplemental/Arial.ttf',      # macOS
-        'C:/Windows/Fonts/Arial.ttf',                        # Windows
-        '/usr/share/fonts/truetype/msttcorefonts/Arial.ttf', # Linux
+        '/Library/Fonts/Arial.ttf',
+        '/System/Library/Fonts/Supplemental/Arial.ttf',
+        'C:/Windows/Fonts/Arial.ttf',
+        '/usr/share/fonts/truetype/msttcorefonts/Arial.ttf',
     ]
     font_registered = False
     for path in possible_paths:
@@ -1246,51 +1101,39 @@ def export_rent_pdf(request):
             font_registered = True
             break
     if not font_registered:
-        # في حال لم يتم العثور على خط، نستخدم Helvetica (قد لا يدعم العربية)
         pdfmetrics.registerFont(TTFont('Arabic', 'Helvetica'))
-    # ---------------------------------------------------------
 
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="rent_report_{year}_{month}.pdf"'
-    
     doc = SimpleDocTemplate(response, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=30, bottomMargin=20)
     elements = []
-    
     styles = getSampleStyleSheet()
     styles['Title'].fontName = 'Arabic'
     title_style = styles['Title']
     title_style.alignment = 1
-    
-    # عنوان التقرير (مع reshape)
     title_text = f"تقرير الإيجارات - {get_month_name(month)} {year}"
     title = Paragraph(prepare_arabic_text(title_text), title_style)
     elements.append(title)
     elements.append(Spacer(1, 0.5*cm))
-    
-    # معلومات الفترة والإجمالي (مع reshape)
     info_style = ParagraphStyle('info', parent=styles['Normal'], fontName='Arabic', alignment=1)
     info_text = f"الفترة: {start_date} إلى {end_date} | الإجمالي: {total_payments:,.2f}"
     info = Paragraph(prepare_arabic_text(info_text), info_style)
     elements.append(info)
     elements.append(Spacer(1, 0.5*cm))
-    
-    # بيانات الجدول
     data = []
     headers = ['التاريخ', 'رقم العقد', 'الوحدة', 'المستأجر', 'المبلغ', 'طريقة الدفع']
     reshaped_headers = [prepare_arabic_text(h) for h in headers]
     data.append(reshaped_headers)
-    
     for p in payments:
         row = [
             str(p.payment_date),
             p.contract.contract_number,
             p.contract.unit.unit_number,
-            prepare_arabic_text(p.contract.tenant.name),          # اسم المستأجر
+            prepare_arabic_text(p.contract.tenant.name),
             f"{p.amount_paid:,.2f}",
-            prepare_arabic_text(p.get_payment_method_display()), # طريقة الدفع
+            prepare_arabic_text(p.get_payment_method_display()),
         ]
         data.append(row)
-    
     table = Table(data, colWidths=[3*cm, 3*cm, 3*cm, 4*cm, 3*cm, 3*cm])
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
@@ -1302,20 +1145,12 @@ def export_rent_pdf(request):
         ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
         ('GRID', (0, 0), (-1, -1), 1, colors.black),
     ]))
-    
     elements.append(table)
     doc.build(elements)
     return response
 
-from django.db.models import Q  # تأكد من وجود هذا الاستيراد مع بقية الاستيرادات
-
-from django.db.models import Q
-
 @login_required
 def advanced_search(request):
-    """
-    صفحة البحث المتقدم مع التصفية حسب معايير متعددة.
-    """
     query = request.GET.get('q', '')
     entity = request.GET.get('entity', 'all')
     date_from = request.GET.get('date_from', '')
@@ -1324,17 +1159,9 @@ def advanced_search(request):
     unit_type = request.GET.get('unit_type', '')
     main_category = request.GET.get('main_category', '')
     sub_category = request.GET.get('sub_category', '')
-
-    results = {
-        'contracts': [],
-        'units': [],
-        'tenants': [],
-        'payments': [],
-        'expenses': [],
-    }
+    results = {'contracts': [], 'units': [], 'tenants': [], 'payments': [], 'expenses': []}
     count = 0
 
-    # ------------------ العقود ------------------
     if entity in ['all', 'contracts']:
         contracts_qs = Contract.objects.all().select_related('unit', 'tenant')
         if query:
@@ -1355,7 +1182,6 @@ def advanced_search(request):
         results['contracts'] = contracts_qs[:50]
         count += len(results['contracts'])
 
-    # ------------------ الوحدات ------------------
     if entity in ['all', 'units']:
         units_qs = Unit.objects.all().select_related('sub_category')
         if query:
@@ -1377,20 +1203,18 @@ def advanced_search(request):
         results['units'] = units_qs[:50]
         count += len(results['units'])
 
-    # ------------------ المستأجرين (مع استبعاد المحذوفين) ------------------
     if entity in ['all', 'tenants']:
-        tenants_qs = Tenant.objects.filter(is_deleted=False)  # استبعاد المحذوفين
-    if query:
-        tenants_qs = tenants_qs.filter(
-            Q(name__icontains=query) |
-            Q(identity_number__icontains=query) |
-            Q(phone__icontains=query) |
-            Q(email__icontains=query)
-        )
-    results['tenants'] = tenants_qs[:50]
-    count += len(results['tenants'])
+        tenants_qs = Tenant.objects.filter(is_deleted=False)
+        if query:
+            tenants_qs = tenants_qs.filter(
+                Q(name__icontains=query) |
+                Q(identity_number__icontains=query) |
+                Q(phone__icontains=query) |
+                Q(email__icontains=query)
+            )
+        results['tenants'] = tenants_qs[:50]
+        count += len(results['tenants'])
 
-    # ------------------ الدفعات ------------------
     if entity in ['all', 'payments']:
         payments_qs = Payment.objects.all().select_related('contract__tenant', 'contract__unit')
         if query:
@@ -1406,7 +1230,6 @@ def advanced_search(request):
         results['payments'] = payments_qs[:50]
         count += len(results['payments'])
 
-    # ------------------ المصاريف ------------------
     if entity in ['all', 'expenses']:
         expenses_qs = Expense.objects.all().select_related('sub_category')
         if query:
@@ -1421,11 +1244,9 @@ def advanced_search(request):
         results['expenses'] = expenses_qs[:50]
         count += len(results['expenses'])
 
-    # ------------------ بيانات القوائم المنسدلة ------------------
     main_categories = MainCategory.objects.all()
     sub_categories = SubCategory.objects.all()
     unit_types = Unit.UNIT_TYPES
-
     context = {
         'results': results,
         'count': count,
@@ -1445,25 +1266,17 @@ def advanced_search(request):
 
 @login_required
 def export_expense_pdf(request):
-    """تصدير تقرير المصاريف إلى PDF"""
     year = int(request.GET.get('year', datetime.now().year))
     month = int(request.GET.get('month', datetime.now().month))
-    
     start_date = date(year, month, 1)
     if month == 12:
         end_date = date(year+1, 1, 1) - timedelta(days=1)
     else:
         end_date = date(year, month+1, 1) - timedelta(days=1)
-    
-    expenses = Expense.objects.filter(
-        date__gte=start_date,
-        date__lte=end_date
-    ).select_related('sub_category')
-    
+    expenses = Expense.objects.filter(date__gte=start_date, date__lte=end_date).select_related('sub_category')
     total_expense = expenses.aggregate(Sum('amount'))['amount__sum'] or 0
     total_refundable = sum(e.tax_amount for e in expenses if e.tax_refundable)
 
-    # ------------------- البحث عن خط عربي -------------------
     possible_paths = [
         '/Library/Fonts/Arial.ttf',
         '/System/Library/Fonts/Supplemental/Arial.ttf',
@@ -1478,38 +1291,28 @@ def export_expense_pdf(request):
             break
     if not font_registered:
         pdfmetrics.registerFont(TTFont('Arabic', 'Helvetica'))
-    # ---------------------------------------------------------
 
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="expense_report_{year}_{month}.pdf"'
-    
     doc = SimpleDocTemplate(response, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=30, bottomMargin=20)
     elements = []
-    
     styles = getSampleStyleSheet()
     styles['Title'].fontName = 'Arabic'
     title_style = styles['Title']
     title_style.alignment = 1
-    
-    # عنوان التقرير (مع reshape)
     title_text = f"تقرير المصاريف - {get_month_name(month)} {year}"
     title = Paragraph(prepare_arabic_text(title_text), title_style)
     elements.append(title)
     elements.append(Spacer(1, 0.5*cm))
-    
-    # معلومات الفترة والإجمالي (مع reshape)
     info_style = ParagraphStyle('info', parent=styles['Normal'], fontName='Arabic', alignment=1)
     info_text = f"الفترة: {start_date} إلى {end_date} | إجمالي المصاريف: {total_expense:,.2f} | ضريبة مستردة: {total_refundable:,.2f}"
     info = Paragraph(prepare_arabic_text(info_text), info_style)
     elements.append(info)
     elements.append(Spacer(1, 0.5*cm))
-    
-    # بيانات الجدول
     data = []
     headers = ['التاريخ', 'القسم', 'البيان', 'المبلغ', 'ضريبة مستردة']
     reshaped_headers = [prepare_arabic_text(h) for h in headers]
     data.append(reshaped_headers)
-    
     for e in expenses:
         row = [
             str(e.date),
@@ -1519,7 +1322,6 @@ def export_expense_pdf(request):
             f"{e.tax_amount:,.2f}" if e.tax_refundable else prepare_arabic_text("-"),
         ]
         data.append(row)
-    
     table = Table(data, colWidths=[3*cm, 4*cm, 5*cm, 3*cm, 3*cm])
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
@@ -1531,9 +1333,6 @@ def export_expense_pdf(request):
         ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
         ('GRID', (0, 0), (-1, -1), 1, colors.black),
     ]))
-    
     elements.append(table)
     doc.build(elements)
     return response
-
-
