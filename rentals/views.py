@@ -69,24 +69,17 @@ def get_quarter_tax(year, quarter):
         effective_start = contract.start_date + timedelta(days=contract.grace_period_days)
         contract_end = contract.start_date + relativedelta(months=contract.lease_duration_months) - timedelta(days=1)
 
-        # إذا كان العقد لا يتداخل مع الربع (مع مراعاة فترة السماح)
+        # إذا كان العقد لا يتداخل مع الربع، نتخطاه
         if effective_start > end_date or contract_end < start_date:
             continue
 
-        # تحديد دورة السداد بالأشهر
-        interval_map = {'monthly': 1, 'quarterly': 3, 'half_yearly': 6, 'yearly': 12}
-        interval_months = interval_map.get(contract.payment_interval, 1)
+        # حساب أشهر التداخل
+        overlap_start = max(effective_start, start_date)
+        overlap_end = min(contract_end, end_date)
+        months = (overlap_end.year - overlap_start.year) * 12 + (overlap_end.month - overlap_start.month) + 1
+        tax_due += contract.tax_amount_monthly * months
 
-        # توليد تواريخ الاستحقاق: نبدأ من تاريخ بداية العقد الفعلي (بعد السماح)
-        # ثم نضيف الدورة في كل مرة
-        due_date = effective_start
-        while due_date <= contract_end:
-            if start_date <= due_date <= end_date:
-                tax_for_period = contract.tax_amount_monthly * interval_months
-                tax_due += tax_for_period
-            due_date += relativedelta(months=interval_months)
-
-    # الضريبة المحصلة تبقى كما هي (من الدفعات الفعلية)
+    # الضريبة المحصلة من الدفعات
     payments = Payment.objects.filter(payment_date__gte=start_date, payment_date__lte=end_date)
     tax_collected = 0
     for payment in payments:
@@ -310,10 +303,20 @@ def subcategory_detail(request, pk):
     units = subcategory.units.all()
     rented_units = units.filter(is_rented=True).count()
     
-    contracts = Contract.objects.filter(unit__sub_category=subcategory, is_active=True)
-    total_expected = sum(c.total_expected for c in contracts)
+    # العقود النشطة في هذا القسم
+    contracts_sub = Contract.objects.filter(unit__sub_category=subcategory, is_active=True)
+    
+    # حساب الإيرادات المتوقعة للسنة الحالية فقط
+    current_year = datetime.now().year
+    total_expected = 0
+    for contract in contracts_sub:
+        total_expected += expected_rent_for_year(contract, current_year)
+    
+    # إجمالي المدفوعات (قد يكون من سنوات سابقة، نتركه كما هو أو نحصره بالسنة حسب الرغبة)
     total_paid = Payment.objects.filter(contract__unit__sub_category=subcategory).aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
-    total_expense = subcategory.total_expenses()  # هذه الدالة موجودة في models.py
+    
+    # إجمالي المصاريف والضريبة المستردة (كما هي)
+    total_expense = subcategory.total_expenses()
     refundable_tax = subcategory.total_refundable_tax()
     
     context = {
