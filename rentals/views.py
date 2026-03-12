@@ -832,7 +832,7 @@ def get_arabic_font_name():
     """استخدام خط عربي محلي من مجلد static/fonts/"""
     import os
     from django.conf import settings
-    font_path = os.path.join(settings.BASE_DIR, 'static', 'fonts', 'DejaVuSans.ttf')  # غيّر اسم الملف حسب خطك
+    font_path = os.path.join(settings.BASE_DIR, 'Static', 'fonts', 'DejaVuSans.ttf')  # غيّر اسم الملف حسب خطك
     if os.path.exists(font_path):
         pdfmetrics.registerFont(TTFont('Arabic', font_path))
         return 'Arabic'
