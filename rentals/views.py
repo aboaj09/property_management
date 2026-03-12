@@ -829,19 +829,14 @@ def get_month_name(month_number):
     return months.get(month_number, '')
 
 def get_arabic_font_name():
-    """تسجيل خط عربي وإرجاع اسمه، أو إرجاع 'Helvetica' كـ fallback"""
+    """استخدام خط عربي محلي من مجلد static/fonts/"""
     import os
-    possible_paths = [
-        '/Library/Fonts/Arial.ttf',
-        '/System/Library/Fonts/Supplemental/Arial.ttf',
-        'C:/Windows/Fonts/Arial.ttf',
-        '/usr/share/fonts/truetype/msttcorefonts/Arial.ttf',
-    ]
-    for path in possible_paths:
-        if os.path.exists(path):
-            pdfmetrics.registerFont(TTFont('Arabic', path))
-            return 'Arabic'
-    # إذا لم يعثر، استخدم Helvetica (خط قياسي)
+    from django.conf import settings
+    font_path = os.path.join(settings.BASE_DIR, 'static', 'fonts', 'DejaVuSans.ttf')  # غيّر اسم الملف حسب خطك
+    if os.path.exists(font_path):
+        pdfmetrics.registerFont(TTFont('Arabic', font_path))
+        return 'Arabic'
+    # إذا لم يوجد الخط المحلي، نستخدم Helvetica كـ fallback
     return 'Helvetica'
 
 # ============================================================
