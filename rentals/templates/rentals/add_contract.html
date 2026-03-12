@@ -80,4 +80,71 @@
         }
     });
 </script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const totalInput = document.getElementById('id_total_with_tax');
+    const rentInput = document.getElementById('id_rent_amount');
+    const taxCheckbox = document.getElementById('id_has_tax');
+    const taxRateInput = document.getElementById('id_tax_rate');
+    let updating = false;
+
+    function calculateTotalFromRent() {
+        if (updating) return;
+        updating = true;
+        const rent = parseFloat(rentInput.value) || 0;
+        if (taxCheckbox.checked) {
+            const rate = parseFloat(taxRateInput.value) || 0;
+            totalInput.value = (rent * (1 + rate/100)).toFixed(2);
+        } else {
+            totalInput.value = rent.toFixed(2);
+        }
+        updating = false;
+    }
+
+    function calculateRentFromTotal() {
+        if (updating) return;
+        updating = true;
+        const total = parseFloat(totalInput.value) || 0;
+        if (taxCheckbox.checked) {
+            const rate = parseFloat(taxRateInput.value) || 0;
+            if (rate > 0) {
+                rentInput.value = (total / (1 + rate/100)).toFixed(2);
+            } else {
+                rentInput.value = total.toFixed(2);
+            }
+        } else {
+            rentInput.value = total.toFixed(2);
+        }
+        updating = false;
+    }
+
+    totalInput.addEventListener('input', calculateRentFromTotal);
+    rentInput.addEventListener('input', calculateTotalFromRent);
+
+    taxCheckbox.addEventListener('change', function() {
+        // إظهار/إخفاء حقل نسبة الضريبة
+        const taxRateDiv = document.getElementById('id_tax_rate').parentNode;
+        taxRateDiv.style.display = taxCheckbox.checked ? 'block' : 'none';
+        
+        // إعادة الحساب بناءً على الحقل المملوء
+        if (rentInput.value && rentInput.value !== '') {
+            calculateTotalFromRent();
+        } else if (totalInput.value && totalInput.value !== '') {
+            calculateRentFromTotal();
+        }
+    });
+
+    taxRateInput.addEventListener('input', function() {
+        if (rentInput.value && rentInput.value !== '') {
+            calculateTotalFromRent();
+        } else if (totalInput.value && totalInput.value !== '') {
+            calculateRentFromTotal();
+        }
+    });
+
+    // إخفاء حقل نسبة الضريبة في البداية إذا لم تكن الضريبة محددة
+    const taxRateDiv = document.getElementById('id_tax_rate').parentNode;
+    taxRateDiv.style.display = taxCheckbox.checked ? 'block' : 'none';
+});
+</script>
 {% endblock %}

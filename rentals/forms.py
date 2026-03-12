@@ -60,8 +60,8 @@ class TenantForm(forms.ModelForm):
 
 class ContractForm(forms.ModelForm):
     total_with_tax = forms.DecimalField(
-        max_digits=12, 
-        decimal_places=2, 
+        max_digits=12,
+        decimal_places=2,
         required=False,
         label=_('المبلغ الإجمالي (شامل الضريبة)'),
         help_text=_('أدخل المبلغ شامل الضريبة ليتم حساب قيمة الإيجار الأساسي تلقائياً')
@@ -69,9 +69,7 @@ class ContractForm(forms.ModelForm):
 
     class Meta:
         model = Contract
-        fields = ['contract_number', 'start_date', 'lease_duration_months', 'rent_type', 
-                  'rent_amount', 'has_tax', 'tax_rate', 'payment_interval', 
-                  'grace_period_days', 'notes']
+        fields = ['contract_number', 'start_date', 'lease_duration_months', 'rent_type', 'rent_amount', 'has_tax', 'tax_rate', 'payment_interval', 'grace_period_days', 'notes']
         labels = {
             'contract_number': _('رقم العقد'),
             'start_date': _('تاريخ البداية'),
@@ -86,7 +84,6 @@ class ContractForm(forms.ModelForm):
         }
         widgets = {
             'start_date': forms.DateInput(attrs={'type': 'date'}),
-            'rent_amount': forms.NumberInput(attrs={'readonly': 'readonly', 'style': 'background-color:#f8f9fa;'}),  # جعل الحقل للقراءة فقط
         }
 
     def __init__(self, *args, **kwargs):
@@ -96,7 +93,6 @@ class ContractForm(forms.ModelForm):
         self.fields['lease_duration_months'].initial = 12
         self.fields['grace_period_days'].required = False
         self.fields['grace_period_days'].initial = 0
-        self.fields['rent_amount'].widget.attrs['readonly'] = True  # تأكيد للقراءة فقط
 
         # إذا كان هناك نموذج موجود (edit)، نحسب total_with_tax من rent_amount
         if self.instance and self.instance.pk:
@@ -111,19 +107,19 @@ class ContractForm(forms.ModelForm):
         has_tax = cleaned_data.get('has_tax')
         tax_rate = cleaned_data.get('tax_rate')
         total_with_tax = cleaned_data.get('total_with_tax')
+        rent_amount = cleaned_data.get('rent_amount')
 
-        if has_tax and tax_rate and total_with_tax:
-            # حساب rent_amount من total_with_tax
-            rent_amount = total_with_tax / (1 + tax_rate/100)
+        # إذا تم إدخال total_with_tax، نحسب rent_amount
+        if total_with_tax is not None and total_with_tax != '':
+            if has_tax and tax_rate:
+                rent_amount = total_with_tax / (1 + tax_rate/100)
+            else:
+                rent_amount = total_with_tax
             cleaned_data['rent_amount'] = round(rent_amount, 2)
-        elif total_with_tax:
-            # إذا لم تكن هناك ضريبة، rent_amount = total_with_tax
-            cleaned_data['rent_amount'] = total_with_tax
-        else:
-            # إذا لم يدخل total_with_tax، نأخذ rent_amount من الحقل القديم (إذا كان مسموحاً)
-            if not cleaned_data.get('rent_amount'):
-                self.add_error('total_with_tax', _('يجب إدخال المبلغ الإجمالي أو قيمة الإيجار الأساسية'))
-        
+        # إذا تم إدخال rent_amount فقط، نتركه (ربما نحسب total_with_tax لاحقاً في JavaScript، لكنه ليس ضرورياً)
+        elif rent_amount is None or rent_amount == '':
+            self.add_error('total_with_tax', _('يجب إدخال المبلغ الإجمالي أو قيمة الإيجار الأساسية'))
+
         return cleaned_data
 
 class PaymentForm(forms.ModelForm):
