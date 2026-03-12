@@ -8,7 +8,7 @@ urlpatterns = [
     path('category/<int:pk>/', views.main_category_detail, name='main_category_detail'),
     path('subcategory/<int:pk>/', views.subcategory_detail, name='subcategory_detail'),
     path('unit/<int:pk>/', views.unit_detail, name='unit_detail'),
-    
+    path('choose-tenant/', views.choose_tenant, name='choose_tenant'),
     # مسارات المصادقة
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),

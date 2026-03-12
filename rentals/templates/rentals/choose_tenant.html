@@ -1,0 +1,48 @@
+{% extends 'rentals/base.html' %}
+{% load i18n %}
+
+{% block title %}اختيار مستأجر{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>اختيار مستأجر للعقد</h2>
+        <a href="{% url 'add_tenant' %}" class="btn btn-success">
+            <i class="fas fa-plus"></i> إضافة مستأجر جديد
+        </a>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>الاسم</th>
+                        <th>رقم الهوية</th>
+                        <th>الجوال</th>
+                        <th>الإجراء</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tenant in tenants %}
+                    <tr>
+                        <td>{{ tenant.name }}</td>
+                        <td>{{ tenant.identity_number }}</td>
+                        <td>{{ tenant.phone }}</td>
+                        <td>
+                            <a href="{% url 'add_contract' %}?tenant_id={{ tenant.id }}" class="btn btn-sm btn-primary">
+                                <i class="fas fa-check"></i> اختيار
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-center">لا يوجد مستأجرين. <a href="{% url 'add_tenant' %}">أضف مستأجر جديد</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

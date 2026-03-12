@@ -436,19 +436,27 @@ def add_contract_for_unit(request, unit_id):
     # تخزين معرف الوحدة في الجلسة للاستخدام في الخطوات التالية
     request.session['new_unit_id'] = unit.id
     
-    # التوجيه إلى إضافة مستأجر (أو يمكن تخطي المستأجر إذا أردنا اختيار مستأجر موجود)
-    return redirect('add_tenant')
+    # التوجيه إلى صفحة اختيار مستأجر (جديدة)
+    return redirect('choose_tenant')
 
 @login_required
 @permission_required('rentals.add_contract', raise_exception=True)
 def add_contract(request):
+    # محاولة الحصول على tenant_id من الرابط أولاً (إذا تم اختيار مستأجر من صفحة أخرى)
+    tenant_id = request.GET.get('tenant_id')
     unit_id = request.session.get('new_unit_id')
-    tenant_id = request.session.get('new_tenant_id')
+    
+    # إذا لم يكن هناك tenant_id من الرابط، نحاول من الجلسة
+    if not tenant_id:
+        tenant_id = request.session.get('new_tenant_id')
+    
     if not unit_id or not tenant_id:
         messages.error(request, _('الرجاء البدء من البداية.'))
         return redirect('home')
+    
     unit = get_object_or_404(Unit, pk=unit_id)
     tenant = get_object_or_404(Tenant, pk=tenant_id)
+    
     if request.method == 'POST':
         form = ContractForm(request.POST, request.FILES)
         if form.is_valid():
@@ -463,8 +471,8 @@ def add_contract(request):
             return redirect('add_payment')
     else:
         form = ContractForm()
+    
     return render(request, 'rentals/add_contract.html', {'form': form, 'unit': unit, 'tenant': tenant})
-
 @login_required
 @permission_required('rentals.add_payment', raise_exception=True)
 def add_payment(request):
@@ -787,6 +795,18 @@ def delete_contract(request, pk):
         messages.success(request, _('تم حذف العقد بنجاح.'))
         return redirect('unit_detail', pk=unit_id)
     return render(request, 'rentals/delete_confirm.html', {'object': contract, 'type': 'contract'})
+
+@login_required
+def choose_tenant(request):
+    """صفحة اختيار مستأجر لإضافة عقد لوحدة محددة مسبقاً"""
+    # التأكد من وجود unit_id في الجلسة
+    unit_id = request.session.get('new_unit_id')
+    if not unit_id:
+        messages.error(request, 'الرجاء البدء من البداية.')
+        return redirect('home')
+    
+    tenants = Tenant.objects.filter(is_deleted=False).order_by('name')
+    return render(request, 'rentals/choose_tenant.html', {'tenants': tenants})
 
 @login_required
 @permission_required('rentals.delete_payment', raise_exception=True)
