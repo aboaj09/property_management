@@ -498,6 +498,19 @@ def expected_rent_for_year(contract, year):
     return contract.total_monthly_with_tax * months
 
 @login_required
+@permission_required('rentals.add_maincategory', raise_exception=True)
+def add_main_category(request):
+    if request.method == 'POST':
+        form = MainCategoryForm(request.POST)
+        if form.is_valid():
+            category = form.save()
+            messages.success(request, _('تم إضافة الفئة الرئيسية بنجاح.'))
+            return redirect('choose_subcategory', category_id=category.id)
+    else:
+        form = MainCategoryForm()
+    return render(request, 'rentals/add_main_category.html', {'form': form})
+
+@login_required
 @permission_required('rentals.add_payment', raise_exception=True)
 def add_payment(request):
     contract_id = request.GET.get('contract') or request.session.get('new_contract_id')
@@ -544,6 +557,8 @@ def add_expense(request, subcategory_id):
     else:
         form = ExpenseForm(initial={'date': date.today()})
     return render(request, 'rentals/add_expense.html', {'form': form, 'subcategory': subcategory})
+
+
 
 @login_required
 @permission_required('rentals.view_expense', raise_exception=False)  # للعرض فقط
@@ -831,6 +846,7 @@ def choose_tenant(request):
     
     tenants = Tenant.objects.filter(is_deleted=False).order_by('name')
     return render(request, 'rentals/choose_tenant.html', {'tenants': tenants})
+
 
 @login_required
 @permission_required('rentals.delete_payment', raise_exception=True)
