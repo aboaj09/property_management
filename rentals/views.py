@@ -411,6 +411,11 @@ def add_tenant(request):
             else:
                 form.instance.identity_number = identity_number
                 tenant = form.save()
+                # بعد حفظ المستأجر
+                next_url = request.POST.get('next') or request.GET.get('next')
+            if next_url:
+                return redirect(next_url)
+                return redirect('add_contract')  # أو أي مسار تريده
                 request.session['new_tenant_id'] = tenant.id
                 return redirect('add_contract')
     else:
@@ -762,6 +767,13 @@ def delete_tenant(request, pk):
         return redirect(next_url) if next_url else redirect('home')
     
     return render(request, 'rentals/delete_confirm.html', {'object': tenant, 'type': 'tenant', 'next': next_url})
+
+@login_required
+@permission_required('rentals.view_tenant', raise_exception=True)
+def tenant_list(request):
+    """عرض جميع المستأجرين (النشطين والمحذوفين)"""
+    tenants = Tenant.objects.all().order_by('-is_deleted', 'name')
+    return render(request, 'rentals/tenant_list.html', {'tenants': tenants})
 
 @login_required
 @permission_required('rentals.delete_contract', raise_exception=True)

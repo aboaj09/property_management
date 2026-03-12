@@ -1,0 +1,65 @@
+{% extends 'rentals/base.html' %}
+{% load i18n %}
+
+{% block title %}المستأجرين - مكتب عمار{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>إدارة المستأجرين</h2>
+        <a href="{% url 'add_tenant' %}" class="btn btn-primary-custom">
+            <i class="fas fa-plus-circle ms-1"></i> إضافة مستأجر جديد
+        </a>
+    </div>
+
+    <div class="content-card">
+        <div class="table-responsive">
+            <table class="table table-custom">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>الاسم</th>
+                        <th>رقم الهوية</th>
+                        <th>الجوال</th>
+                        <th>الحالة</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tenant in tenants %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ tenant.name }}</td>
+                        <td>{{ tenant.identity_number }}</td>
+                        <td>{{ tenant.phone }}</td>
+                        <td>
+                            {% if tenant.is_deleted %}
+                                <span class="badge badge-danger-custom">محذوف</span>
+                            {% else %}
+                                <span class="badge badge-success-custom">نشط</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if not tenant.is_deleted %}
+                                <a href="{% url 'edit_tenant' tenant.id %}" class="btn btn-warning-custom btn-sm">
+                                    <i class="fas fa-edit"></i> تعديل
+                                </a>
+                                <a href="{% url 'delete_tenant' tenant.id %}" class="btn btn-danger-custom btn-sm">
+                                    <i class="fas fa-trash"></i> حذف
+                                </a>
+                            {% else %}
+                                <span class="text-muted">غير متاح</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4">لا يوجد مستأجرين مسجلين</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
