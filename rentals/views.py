@@ -828,6 +828,22 @@ def get_month_name(month_number):
     }
     return months.get(month_number, '')
 
+def get_arabic_font_name():
+    """تسجيل خط عربي وإرجاع اسمه، أو إرجاع 'Helvetica' كـ fallback"""
+    import os
+    possible_paths = [
+        '/Library/Fonts/Arial.ttf',
+        '/System/Library/Fonts/Supplemental/Arial.ttf',
+        'C:/Windows/Fonts/Arial.ttf',
+        '/usr/share/fonts/truetype/msttcorefonts/Arial.ttf',
+    ]
+    for path in possible_paths:
+        if os.path.exists(path):
+            pdfmetrics.registerFont(TTFont('Arabic', path))
+            return 'Arabic'
+    # إذا لم يعثر، استخدم Helvetica (خط قياسي)
+    return 'Helvetica'
+
 # ============================================================
 # صفحة التقارير الرئيسية
 # ============================================================
@@ -1073,7 +1089,7 @@ def export_expense_excel(request):
     return response
 
 # ============================================================
-# تصدير إلى PDF
+# تصدير  
 # ============================================================
 
 @login_required
@@ -1088,34 +1104,21 @@ def export_rent_pdf(request):
     payments = Payment.objects.filter(payment_date__gte=start_date, payment_date__lte=end_date).select_related('contract__unit', 'contract__tenant')
     total_payments = payments.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
 
-    possible_paths = [
-        '/Library/Fonts/Arial.ttf',
-        '/System/Library/Fonts/Supplemental/Arial.ttf',
-        'C:/Windows/Fonts/Arial.ttf',
-        '/usr/share/fonts/truetype/msttcorefonts/Arial.ttf',
-    ]
-    font_registered = False
-    for path in possible_paths:
-        if os.path.exists(path):
-            pdfmetrics.registerFont(TTFont('Arabic', path))
-            font_registered = True
-            break
-    if not font_registered:
-        pdfmetrics.registerFont(TTFont('Arabic', 'Helvetica'))
+    arabic_font = get_arabic_font_name()
 
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="rent_report_{year}_{month}.pdf"'
     doc = SimpleDocTemplate(response, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=30, bottomMargin=20)
     elements = []
     styles = getSampleStyleSheet()
-    styles['Title'].fontName = 'Arabic'
+    styles['Title'].fontName = arabic_font
     title_style = styles['Title']
     title_style.alignment = 1
     title_text = f"تقرير الإيجارات - {get_month_name(month)} {year}"
     title = Paragraph(prepare_arabic_text(title_text), title_style)
     elements.append(title)
     elements.append(Spacer(1, 0.5*cm))
-    info_style = ParagraphStyle('info', parent=styles['Normal'], fontName='Arabic', alignment=1)
+    info_style = ParagraphStyle('info', parent=styles['Normal'], fontName=arabic_font, alignment=1)
     info_text = f"الفترة: {start_date} إلى {end_date} | الإجمالي: {total_payments:,.2f}"
     info = Paragraph(prepare_arabic_text(info_text), info_style)
     elements.append(info)
@@ -1139,7 +1142,7 @@ def export_rent_pdf(request):
         ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, -1), 'Arabic'),
+        ('FONTNAME', (0, 0), (-1, -1), arabic_font),
         ('FONTSIZE', (0, 0), (-1, -1), 10),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
         ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
@@ -1147,6 +1150,53 @@ def export_rent_pdf(request):
     ]))
     elements.append(table)
     doc.build(elements)
+    return response
+
+@login_required
+def export_rent_excel(request):
+    year = int(request.GET.get('year', datetime.now().year))
+    month = int(request.GET.get('month', datetime.now().month))
+    
+    start_date = date(year, month, 1)
+    if month == 12:
+        end_date = date(year+1, 1, 1) - timedelta(days=1)
+    else:
+        end_date = date(year, month+1, 1) - timedelta(days=1)
+    
+    payments = Payment.objects.filter(
+        payment_date__gte=start_date,
+        payment_date__lte=end_date
+    ).select_related('contract__unit', 'contract__tenant')
+    
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f"تقرير إيجارات {get_month_name(month)} {year}"
+    
+    headers = ['التاريخ', 'رقم العقد', 'الوحدة', 'المستأجر', 'المبلغ', 'طريقة الدفع', 'ملاحظات']
+    for col_num, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_num)
+        cell.value = header
+        cell.font = Font(bold=True)
+        cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        cell.font = Font(color="FFFFFF", bold=True)
+        cell.alignment = Alignment(horizontal='center')
+    
+    for row_num, payment in enumerate(payments, 2):
+        ws.cell(row=row_num, column=1).value = payment.payment_date
+        ws.cell(row=row_num, column=2).value = payment.contract.contract_number
+        ws.cell(row=row_num, column=3).value = payment.contract.unit.unit_number
+        ws.cell(row=row_num, column=4).value = payment.contract.tenant.name
+        ws.cell(row=row_num, column=5).value = float(payment.amount_paid)
+        ws.cell(row=row_num, column=6).value = payment.get_payment_method_display()
+        ws.cell(row=row_num, column=7).value = payment.notes
+    
+    for col_num in range(1, 8):
+        column_letter = get_column_letter(col_num)
+        ws.column_dimensions[column_letter].width = 15
+    
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="rent_report_{year}_{month}.xlsx"'
+    wb.save(response)
     return response
 
 @login_required
@@ -1268,51 +1318,50 @@ def advanced_search(request):
 def export_expense_pdf(request):
     year = int(request.GET.get('year', datetime.now().year))
     month = int(request.GET.get('month', datetime.now().month))
+    
     start_date = date(year, month, 1)
     if month == 12:
         end_date = date(year+1, 1, 1) - timedelta(days=1)
     else:
         end_date = date(year, month+1, 1) - timedelta(days=1)
-    expenses = Expense.objects.filter(date__gte=start_date, date__lte=end_date).select_related('sub_category')
+    
+    expenses = Expense.objects.filter(
+        date__gte=start_date,
+        date__lte=end_date
+    ).select_related('sub_category')
+    
     total_expense = expenses.aggregate(Sum('amount'))['amount__sum'] or 0
     total_refundable = sum(e.tax_amount for e in expenses if e.tax_refundable)
 
-    possible_paths = [
-        '/Library/Fonts/Arial.ttf',
-        '/System/Library/Fonts/Supplemental/Arial.ttf',
-        'C:/Windows/Fonts/Arial.ttf',
-        '/usr/share/fonts/truetype/msttcorefonts/Arial.ttf',
-    ]
-    font_registered = False
-    for path in possible_paths:
-        if os.path.exists(path):
-            pdfmetrics.registerFont(TTFont('Arabic', path))
-            font_registered = True
-            break
-    if not font_registered:
-        pdfmetrics.registerFont(TTFont('Arabic', 'Helvetica'))
+    arabic_font = get_arabic_font_name()
 
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="expense_report_{year}_{month}.pdf"'
+    
     doc = SimpleDocTemplate(response, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=30, bottomMargin=20)
     elements = []
+    
     styles = getSampleStyleSheet()
-    styles['Title'].fontName = 'Arabic'
+    styles['Title'].fontName = arabic_font
     title_style = styles['Title']
     title_style.alignment = 1
+    
     title_text = f"تقرير المصاريف - {get_month_name(month)} {year}"
     title = Paragraph(prepare_arabic_text(title_text), title_style)
     elements.append(title)
     elements.append(Spacer(1, 0.5*cm))
-    info_style = ParagraphStyle('info', parent=styles['Normal'], fontName='Arabic', alignment=1)
+    
+    info_style = ParagraphStyle('info', parent=styles['Normal'], fontName=arabic_font, alignment=1)
     info_text = f"الفترة: {start_date} إلى {end_date} | إجمالي المصاريف: {total_expense:,.2f} | ضريبة مستردة: {total_refundable:,.2f}"
     info = Paragraph(prepare_arabic_text(info_text), info_style)
     elements.append(info)
     elements.append(Spacer(1, 0.5*cm))
+    
     data = []
     headers = ['التاريخ', 'القسم', 'البيان', 'المبلغ', 'ضريبة مستردة']
     reshaped_headers = [prepare_arabic_text(h) for h in headers]
     data.append(reshaped_headers)
+    
     for e in expenses:
         row = [
             str(e.date),
@@ -1322,17 +1371,65 @@ def export_expense_pdf(request):
             f"{e.tax_amount:,.2f}" if e.tax_refundable else prepare_arabic_text("-"),
         ]
         data.append(row)
+    
     table = Table(data, colWidths=[3*cm, 4*cm, 5*cm, 3*cm, 3*cm])
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, -1), 'Arabic'),
+        ('FONTNAME', (0, 0), (-1, -1), arabic_font),
         ('FONTSIZE', (0, 0), (-1, -1), 10),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
         ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
         ('GRID', (0, 0), (-1, -1), 1, colors.black),
     ]))
+    
     elements.append(table)
     doc.build(elements)
+    return response
+
+@login_required
+def export_expense_excel(request):
+    year = int(request.GET.get('year', datetime.now().year))
+    month = int(request.GET.get('month', datetime.now().month))
+    
+    start_date = date(year, month, 1)
+    if month == 12:
+        end_date = date(year+1, 1, 1) - timedelta(days=1)
+    else:
+        end_date = date(year, month+1, 1) - timedelta(days=1)
+    
+    expenses = Expense.objects.filter(
+        date__gte=start_date,
+        date__lte=end_date
+    ).select_related('sub_category')
+    
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f"تقرير مصاريف {get_month_name(month)} {year}"
+    
+    headers = ['التاريخ', 'القسم', 'البيان', 'المبلغ', 'ضريبة مستردة', 'ملاحظات']
+    for col_num, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_num)
+        cell.value = header
+        cell.font = Font(bold=True)
+        cell.fill = PatternFill(start_color="C00000", end_color="C00000", fill_type="solid")
+        cell.font = Font(color="FFFFFF", bold=True)
+        cell.alignment = Alignment(horizontal='center')
+    
+    for row_num, exp in enumerate(expenses, 2):
+        ws.cell(row=row_num, column=1).value = exp.date
+        ws.cell(row=row_num, column=2).value = exp.sub_category.name
+        ws.cell(row=row_num, column=3).value = exp.description
+        ws.cell(row=row_num, column=4).value = float(exp.amount)
+        ws.cell(row=row_num, column=5).value = float(exp.tax_amount) if exp.tax_refundable else 0
+        ws.cell(row=row_num, column=6).value = exp.notes
+    
+    for col_num in range(1, 7):
+        column_letter = get_column_letter(col_num)
+        ws.column_dimensions[column_letter].width = 15
+    
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="expense_report_{year}_{month}.xlsx"'
+    wb.save(response)
     return response
