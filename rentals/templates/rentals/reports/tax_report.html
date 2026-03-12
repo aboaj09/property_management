@@ -4,39 +4,27 @@
 {% block title %}{% trans "تقرير الضريبة" %}{% endblock %}
 
 {% block content %}
-
-<div class="mb-3">
-    <label class="form-label">نوع التقرير</label>
-    <div>
-        <div class="form-check form-check-inline">
-            <input class="form-check-input" type="radio" name="report_type" id="monthly" value="monthly" {% if report_type != 'yearly' %}checked{% endif %}>
-            <label class="form-check-label" for="monthly">شهري</label>
-        </div>
-        <div class="form-check form-check-inline">
-            <input class="form-check-input" type="radio" name="report_type" id="yearly" value="yearly" {% if report_type == 'yearly' %}checked{% endif %}>
-            <label class="form-check-label" for="yearly">سنوي</label>
-        </div>
-    </div>
-</div>
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2>{% trans "تقرير الضريبة" %} - {{ period_name }}</h2>
-    <a href="{% url 'reports_dashboard' %}" class="btn btn-outline-secondary">
-        <i class="bi bi-arrow-right"></i> {% trans "عودة للتقارير" %}
-    </a>
+    <div>
+        <a href="{% url 'reports_dashboard' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-right"></i> {% trans "عودة للتقارير" %}
+        </a>
+    </div>
 </div>
 
-<!-- نموذج اختيار الفترة -->
 <div class="card mb-4">
     <div class="card-body">
         <form method="get" class="row g-3">
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label">{% trans "نوع التقرير" %}</label>
                 <select name="type" class="form-select">
                     <option value="monthly" {% if report_type == 'monthly' %}selected{% endif %}>{% trans "شهري" %}</option>
                     <option value="quarterly" {% if report_type == 'quarterly' %}selected{% endif %}>{% trans "ربع سنوي" %}</option>
+                    <option value="yearly" {% if report_type == 'yearly' %}selected{% endif %}>{% trans "سنوي" %}</option>
                 </select>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label">{% trans "السنة" %}</label>
                 <select name="year" class="form-select">
                     {% for y in years %}
@@ -44,7 +32,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-3" id="month-field">
+            <div class="col-md-2" id="month-field" style="{% if report_type != 'monthly' %}display: none;{% endif %}">
                 <label class="form-label">{% trans "الشهر" %}</label>
                 <select name="month" class="form-select">
                     {% for m in months %}
@@ -52,7 +40,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-3" id="quarter-field" style="display: none;">
+            <div class="col-md-2" id="quarter-field" style="{% if report_type != 'quarterly' %}display: none;{% endif %}">
                 <label class="form-label">{% trans "الربع" %}</label>
                 <select name="quarter" class="form-select">
                     <option value="1" {% if quarter == 1 %}selected{% endif %}>{% trans "الربع الأول" %}</option>
@@ -61,73 +49,64 @@
                     <option value="4" {% if quarter == 4 %}selected{% endif %}>{% trans "الربع الرابع" %}</option>
                 </select>
             </div>
-            <div class="col-md-3 d-flex align-items-end">
+            <div class="col-md-2 d-flex align-items-end">
                 <button type="submit" class="btn btn-primary">{% trans "عرض" %}</button>
             </div>
         </form>
     </div>
 </div>
 
-<!-- بطاقات النتائج الرئيسية -->
 <div class="row g-3 mb-4">
     <div class="col-md-3">
-        <div class="card text-white bg-primary h-100">
+        <div class="card text-white bg-primary">
             <div class="card-body text-center">
-                <h6>{% trans "ضريبة مستحقة" %}</h6>
+                <h5>{% trans "ضريبة مستحقة" %}</h5>
                 <h3>{{ tax_due|floatformat:2 }}</h3>
-                <small>تستحق في بداية كل دورة</small>
             </div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card text-white bg-success h-100">
+        <div class="card text-white bg-success">
             <div class="card-body text-center">
-                <h6>{% trans "ضريبة محصلة" %}</h6>
+                <h5>{% trans "ضريبة محصلة" %}</h5>
                 <h3>{{ tax_collected|floatformat:2 }}</h3>
-                <small>تم تحصيلها من المستأجرين</small>
             </div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card text-white bg-info h-100">
+        <div class="card text-white bg-info">
             <div class="card-body text-center">
-                <h6>{% trans "ضريبة مستردة" %}</h6>
+                <h5>{% trans "ضريبة مستردة" %}</h5>
                 <h3>{{ tax_refunded|floatformat:2 }}</h3>
-                <small>من المصاريف</small>
             </div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card text-white bg-warning h-100">
+        <div class="card text-white bg-warning">
             <div class="card-body text-center">
-                <h6>{% trans "صافي الضريبة" %}</h6>
+                <h5>{% trans "صافي الضريبة" %}</h5>
                 <h3>{{ net_tax|floatformat:2 }}</h3>
-                <small>المستحق للحكومة = مستحقة - مستردة</small>
             </div>
         </div>
     </div>
-</div>
-
-<!-- ملاحظة توضيحية -->
-<div class="alert alert-info">
-    <i class="bi bi-info-circle"></i>
-    <strong>ملاحظة:</strong> الضريبة المستحقة تُحتسب بناءً على تاريخ بداية كل دورة سداد (شهرية، ربع سنوية، نصف سنوية، سنوية) بغض النظر عن تاريخ الدفع الفعلي.
 </div>
 
 <script>
-    // إظهار/إخفاء حقول الشهر والربع
     document.addEventListener('DOMContentLoaded', function() {
-        var typeSelect = document.querySelector('select[name="type"]');
-        var monthField = document.getElementById('month-field');
-        var quarterField = document.getElementById('quarter-field');
+        const typeSelect = document.querySelector('select[name="type"]');
+        const monthField = document.getElementById('month-field');
+        const quarterField = document.getElementById('quarter-field');
         
         function toggleFields() {
             if (typeSelect.value === 'monthly') {
                 monthField.style.display = 'block';
                 quarterField.style.display = 'none';
-            } else {
+            } else if (typeSelect.value === 'quarterly') {
                 monthField.style.display = 'none';
                 quarterField.style.display = 'block';
+            } else { // yearly
+                monthField.style.display = 'none';
+                quarterField.style.display = 'none';
             }
         }
         

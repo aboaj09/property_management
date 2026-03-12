@@ -931,10 +931,9 @@ def rent_report(request):
     
     total_payments = payments.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
     
-    # حساب العقود النشطة يدوياً
+    # حساب الإيجار المتوقع
     all_contracts = Contract.objects.filter(is_active=True)
     expected_rent = 0
-    
     for contract in all_contracts:
         contract_end = contract.start_date + relativedelta(months=contract.lease_duration_months) - timedelta(days=1)
         if contract.start_date <= end_date and contract_end >= start_date:
@@ -942,10 +941,6 @@ def rent_report(request):
             overlap_end = min(contract_end, end_date)
             months = (overlap_end.year - overlap_start.year) * 12 + (overlap_end.month - overlap_start.month) + 1
             expected_rent += contract.total_monthly_with_tax * months
-    
-    current_year = datetime.now().year
-    years = range(current_year - 5, current_year + 1)
-    months = range(1, 13)
     
     context = {
         'report_type': report_type,
@@ -957,8 +952,8 @@ def rent_report(request):
         'expected_rent': expected_rent,
         'start_date': start_date,
         'end_date': end_date,
-        'years': years,
-        'months': months,
+        'years': range(datetime.now().year-5, datetime.now().year+1),
+        'months': range(1, 13),
     }
     return render(request, 'rentals/reports/rent_report.html', context)
 
@@ -1013,21 +1008,16 @@ def expense_report(request):
 
 @login_required
 def tax_report(request):
-    """تقرير الضريبة (شهري / ربع سنوي) - مع حساب صافي الضريبة"""
     report_type = request.GET.get('type', 'monthly')
     year = int(request.GET.get('year', datetime.now().year))
     month = int(request.GET.get('month', datetime.now().month))
     quarter = int(request.GET.get('quarter', 1))
     
-    # تحديد تاريخ البداية والنهاية
-    if report_type == 'monthly':
-        start_date = date(year, month, 1)
-        if month == 12:
-            end_date = date(year+1, 1, 1) - timedelta(days=1)
-        else:
-            end_date = date(year, month+1, 1) - timedelta(days=1)
-        period_name = f"{get_month_name(month)} {year}"
-    else:  # quarterly
+    if report_type == 'yearly':
+        start_date = date(year, 1, 1)
+        end_date = date(year, 12, 31)
+        period_name = f"السنة {year}"
+    elif report_type == 'quarterly':
         if quarter == 1:
             start_date = date(year, 1, 1)
             end_date = date(year, 3, 31)
@@ -1041,71 +1031,35 @@ def tax_report(request):
             start_date = date(year, 10, 1)
             end_date = date(year, 12, 31)
         period_name = f"الربع {quarter} {year}"
+    else:
+        start_date = date(year, month, 1)
+        if month == 12:
+            end_date = date(year+1, 1, 1) - timedelta(days=1)
+        else:
+            end_date = date(year, month+1, 1) - timedelta(days=1)
+        period_name = f"{get_month_name(month)} {year}"
     
-    # ------------------------------------------------------------
-    # 1. الضريبة المستحقة (حسب تواريخ بداية دورات السداد)
-    # ------------------------------------------------------------
+    # الضريبة المستحقة
     all_contracts = Contract.objects.filter(is_active=True)
     tax_due = 0
-    tax_due_details = []
-    
     for contract in all_contracts:
-        # مدة دورة السداد بالأشهر
-        interval_map = {'monthly': 1, 'quarterly': 3, 'half_yearly': 6, 'yearly': 12}
-        interval_months = interval_map.get(contract.payment_interval, 1)
-        
         contract_end = contract.start_date + relativedelta(months=contract.lease_duration_months) - timedelta(days=1)
-        
-        # إذا العقد لا يغطي الفترة، نتخطاه
-        if contract.start_date > end_date or contract_end < start_date:
-            continue
-        
-        # توليد تواريخ الاستحقاق
-        due_date = contract.start_date
-        while due_date <= contract_end:
-            if start_date <= due_date <= end_date:
-                tax_for_period = contract.tax_amount_monthly * interval_months
-                tax_due += tax_for_period
-                tax_due_details.append({
-                    'contract': contract,
-                    'date': due_date,
-                    'amount': tax_for_period,
-                })
-            due_date += relativedelta(months=interval_months)
+        if contract.start_date <= end_date and contract_end >= start_date:
+            overlap_start = max(contract.start_date, start_date)
+            overlap_end = min(contract_end, end_date)
+            months = (overlap_end.year - overlap_start.year) * 12 + (overlap_end.month - overlap_start.month) + 1
+            tax_due += contract.tax_amount_monthly * months
     
-    # ------------------------------------------------------------
-    # 2. الضريبة المحصلة (من الدفعات المسجلة)
-    # ------------------------------------------------------------
-    payments = Payment.objects.filter(
-        payment_date__gte=start_date,
-        payment_date__lte=end_date
-    )
+    # الضريبة المحصلة
+    payments = Payment.objects.filter(payment_date__gte=start_date, payment_date__lte=end_date)
     tax_collected = 0
-    for payment in payments:
-        if payment.contract.has_tax:
-            tax_collected += payment.amount_paid * (payment.contract.tax_rate / 100) / (1 + payment.contract.tax_rate/100)
+    for p in payments:
+        if p.contract.has_tax:
+            tax_collected += p.amount_paid * (p.contract.tax_rate/100) / (1 + p.contract.tax_rate/100)
     
-    # ------------------------------------------------------------
-    # 3. الضريبة المستردة (من المصاريف)
-    # ------------------------------------------------------------
-    expenses = Expense.objects.filter(
-        date__gte=start_date,
-        date__lte=end_date,
-        tax_refundable=True
-    )
+    # الضريبة المستردة
+    expenses = Expense.objects.filter(date__gte=start_date, date__lte=end_date, tax_refundable=True)
     tax_refunded = sum(exp.tax_amount for exp in expenses)
-    
-    # ------------------------------------------------------------
-    # 4. صافي الضريبة المستحق للحكومة
-    # ------------------------------------------------------------
-    net_tax = tax_due - tax_refunded   # هذا هو المهم
-    
-    # ------------------------------------------------------------
-    # إعداد متغيرات للقالب
-    # ------------------------------------------------------------
-    current_year = datetime.now().year
-    years = range(current_year - 5, current_year + 1)
-    months = range(1, 13)
     
     context = {
         'report_type': report_type,
@@ -1113,15 +1067,12 @@ def tax_report(request):
         'month': month,
         'quarter': quarter,
         'period_name': period_name,
-        'start_date': start_date,
-        'end_date': end_date,
         'tax_due': tax_due,
         'tax_collected': tax_collected,
         'tax_refunded': tax_refunded,
-        'net_tax': net_tax,                 # تم التأكيد على هذا المتغير
-        'tax_due_details': tax_due_details, # اختياري
-        'years': years,
-        'months': months,
+        'net_tax': tax_due - tax_refunded,
+        'years': range(datetime.now().year-5, datetime.now().year+1),
+        'months': range(1, 13),
     }
     return render(request, 'rentals/reports/tax_report.html', context)
 

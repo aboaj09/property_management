@@ -5,7 +5,7 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2>{% trans "تقرير المصاريف" %} - {{ month_name }} {{ year }}</h2>
+    <h2>{% trans "تقرير المصاريف" %} - {{ period_name }}</h2>
     <div>
         <a href="{% url 'reports_dashboard' %}" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-right"></i> {% trans "عودة للتقارير" %}
@@ -16,7 +16,14 @@
 <div class="card mb-4">
     <div class="card-body">
         <form method="get" class="row g-3">
-            <div class="col-md-4">
+            <div class="col-md-2">
+                <label class="form-label">{% trans "نوع التقرير" %}</label>
+                <select name="report_type" class="form-select">
+                    <option value="monthly" {% if report_type == 'monthly' %}selected{% endif %}>{% trans "شهري" %}</option>
+                    <option value="yearly" {% if report_type == 'yearly' %}selected{% endif %}>{% trans "سنوي" %}</option>
+                </select>
+            </div>
+            <div class="col-md-2">
                 <label class="form-label">{% trans "السنة" %}</label>
                 <select name="year" class="form-select">
                     {% for y in years %}
@@ -24,7 +31,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-2" id="month-field" style="{% if report_type == 'yearly' %}display: none;{% endif %}">
                 <label class="form-label">{% trans "الشهر" %}</label>
                 <select name="month" class="form-select">
                     {% for m in months %}
@@ -32,12 +39,12 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-4 d-flex align-items-end">
+            <div class="col-md-3 d-flex align-items-end">
                 <button type="submit" class="btn btn-primary">{% trans "عرض" %}</button>
-                <a href="{% url 'export_expense_excel' %}?year={{ year }}&month={{ month }}" class="btn btn-success ms-2">
+                <a href="{% url 'export_expense_excel' %}?report_type={{ report_type }}&year={{ year }}&month={{ month }}" class="btn btn-success ms-2">
                     <i class="bi bi-file-excel"></i> Excel
                 </a>
-                <a href="{% url 'export_expense_pdf' %}?year={{ year }}&month={{ month }}" class="btn btn-danger ms-2">
+                <a href="{% url 'export_expense_pdf' %}?report_type={{ report_type }}&year={{ year }}&month={{ month }}" class="btn btn-danger ms-2">
                     <i class="bi bi-file-pdf"></i> PDF
                 </a>
             </div>
@@ -99,4 +106,16 @@
         </div>
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const reportType = document.querySelector('select[name="report_type"]');
+        const monthField = document.getElementById('month-field');
+        function toggleMonth() {
+            monthField.style.display = reportType.value === 'yearly' ? 'none' : 'block';
+        }
+        reportType.addEventListener('change', toggleMonth);
+        toggleMonth();
+    });
+</script>
 {% endblock %}
