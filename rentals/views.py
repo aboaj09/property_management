@@ -474,8 +474,7 @@ def add_contract(request):
 
 def total_rent_due_up_to_date(contract, end_date):
     """
-    حساب إجمالي الإيجار المستحق (شامل الضريبة) للعقد حتى تاريخ end_date.
-    يتم ذلك عن طريق جمع قيم جميع الدفعات التي تاريخ استحقاقها <= end_date.
+    حساب إجمالي الإيجار المستحق (شامل الضريبة) حتى تاريخ معين (end_date).
     """
     due_dates = get_payment_dates(contract, end_limit=end_date)
     if not due_dates:
@@ -501,18 +500,6 @@ def get_payment_dates(contract, start_limit=None, end_limit=None):
             dates.append(current)
         current += relativedelta(months=interval)
     return dates
-
-def total_rent_due_up_to_date(contract, end_date):
-    """
-    حساب إجمالي الإيجار المستحق (شامل الضريبة) حتى تاريخ معين (end_date).
-    """
-    due_dates = get_payment_dates(contract, end_limit=end_date)
-    if not due_dates:
-        return 0
-    interval_map = {'monthly': 1, 'quarterly': 3, 'half_yearly': 6, 'yearly': 12}
-    months_per_payment = interval_map.get(contract.payment_interval, 1)
-    rent_per_payment = contract.total_monthly_with_tax * months_per_payment
-    return rent_per_payment * len(due_dates)
 
 def expected_rent_for_year(contract, year):
     """
