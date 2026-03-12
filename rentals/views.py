@@ -143,11 +143,19 @@ def home(request):
     rented_units = Unit.objects.filter(is_rented=True).count()
     
     contracts = Contract.objects.filter(is_active=True)
-    total_expected = sum(c.total_expected for c in contracts)
+    
+    # حساب الإيرادات المتوقعة للسنة الحالية فقط
+    total_expected = 0
+    for contract in contracts:
+        total_expected += expected_rent_for_year(contract, current_year)
+    
+    # إجمالي المدفوعات (كل الدفعات المسجلة)
     total_paid = Payment.objects.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
+    
+    # المتبقي = المتوقع - المدفوع
     total_remaining = total_expected - total_paid
     
-    # الضريبة (باستخدام الدالة المعدلة)
+    # الضريبة
     total_tax_due = 0
     total_tax_collected = 0
     quarters = []
@@ -167,7 +175,7 @@ def home(request):
     for exp in expenses_refundable:
         total_tax_refunded += exp.tax_amount
 
-    # صافي الضريبة = الضريبة المستحقة - الضريبة المستردة
+    # صافي الضريبة
     net_tax = total_tax_due - total_tax_refunded
         
     # بيانات الأقسام الفرعية
@@ -177,7 +185,10 @@ def home(request):
         units_count = sub.units.count()
         rented_count = sub.units.filter(is_rented=True).count()
         contracts_sub = Contract.objects.filter(unit__sub_category=sub, is_active=True)
-        total_rent_expected = sum(c.total_expected for c in contracts_sub)
+        
+        # الإيرادات المتوقعة للسنة الحالية لكل قسم
+        total_rent_expected = sum(expected_rent_for_year(c, current_year) for c in contracts_sub)
+        
         total_expense = sub.total_expenses()
         refundable_tax = sub.total_refundable_tax()
         total_paid_sub = Payment.objects.filter(contract__unit__sub_category=sub).aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
@@ -196,7 +207,7 @@ def home(request):
             'total_remaining': total_remaining_sub,
         })
     
-    # بيانات الرسوم البيانية (كما هي)
+    # بيانات الرسوم البيانية
     monthly_labels = []
     monthly_income = []
     for i in range(5, -1, -1):
@@ -473,6 +484,29 @@ def add_contract(request):
         form = ContractForm()
     
     return render(request, 'rentals/add_contract.html', {'form': form, 'unit': unit, 'tenant': tenant})
+
+def expected_rent_for_year(contract, year):
+    """
+    تحسب مجموع الإيجار الشهري (مع الضريبة) الذي يقع ضمن السنة المحددة.
+    """
+    start_of_year = date(year, 1, 1)
+    end_of_year = date(year, 12, 31)
+
+    # تاريخ بداية العقد الفعلي (بعد السماح)
+    effective_start = contract.start_date + timedelta(days=contract.grace_period_days)
+    contract_end = contract.start_date + relativedelta(months=contract.lease_duration_months) - timedelta(days=1)
+
+    # إذا العقد لا يغطي السنة إطلاقاً
+    if effective_start > end_of_year or contract_end < start_of_year:
+        return 0
+
+    # حساب فترة التداخل
+    overlap_start = max(effective_start, start_of_year)
+    overlap_end = min(contract_end, end_of_year)
+    months = (overlap_end.year - overlap_start.year) * 12 + (overlap_end.month - overlap_start.month) + 1
+
+    return contract.total_monthly_with_tax * months
+
 @login_required
 @permission_required('rentals.add_payment', raise_exception=True)
 def add_payment(request):
