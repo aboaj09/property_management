@@ -2,7 +2,7 @@
 {% load i18n %}
 
 {% block title %}{% trans "إضافة مستأجر" %}{% endblock %}
-
+<a href="{% url 'tenant_list' %}" class="btn btn-secondary">العودة لقائمة المستأجرين</a>
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-8 col-lg-6">
@@ -26,9 +26,7 @@
                         </div>
                     {% endfor %}
                     <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-info text-white">
-                            <i class="bi bi-check-circle"></i> {% trans "التالي" %}
-                        </button>
+                        <button type="submit" class="btn btn-primary">{% trans "حفظ" %}</button>
                         <a href="{% url 'home' %}" class="btn btn-outline-secondary">
                             <i class="bi bi-x-circle"></i> {% trans "إلغاء" %}
                         </a>

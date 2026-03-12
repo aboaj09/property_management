@@ -345,20 +345,8 @@ def unit_detail(request, pk):
 @login_required
 def add_unit_flow(request):
     categories = MainCategory.objects.all()
+    # لا حاجة لتخزين أي شيء في الجلسة هنا، لأن الخطوة القادمة هي اختيار الفئة
     return render(request, 'rentals/add_unit_flow.html', {'categories': categories})
-
-@login_required
-@permission_required('rentals.add_maincategory', raise_exception=True)
-def add_main_category(request):
-    if request.method == 'POST':
-        form = MainCategoryForm(request.POST)
-        if form.is_valid():
-            category = form.save()
-            messages.success(request, _('تم إضافة الفئة الرئيسية بنجاح.'))
-            return redirect('choose_subcategory', category_id=category.id)
-    else:
-        form = MainCategoryForm()
-    return render(request, 'rentals/add_main_category.html', {'form': form})
 
 @login_required
 def choose_subcategory(request, category_id):
@@ -402,7 +390,8 @@ def add_unit(request, subcategory_id):
             unit.save()
             messages.success(request, _('تم إضافة الوحدة بنجاح.'))
             request.session['new_unit_id'] = unit.id
-            return redirect('add_tenant')
+            # التوجيه إلى صفحة اختيار المستأجر بدلاً من add_tenant
+            return redirect('choose_tenant')
     else:
         form = UnitForm()
     return render(request, 'rentals/add_unit.html', {'form': form, 'subcategory': subcategory})
@@ -415,20 +404,21 @@ def add_tenant(request):
         if form.is_valid():
             identity_number = normalize_arabic_numbers(form.cleaned_data['identity_number'])
             
-            # التحقق من عدم وجود مستأجر نشط بنفس الرقم (فقط is_deleted=False)
             if Tenant.objects.filter(identity_number=identity_number, is_deleted=False).exists():
                 messages.error(request, _('رقم الهوية مستخدم مسبقاً من قبل مستأجر نشط.'))
                 return render(request, 'rentals/add_tenant.html', {'form': form})
             else:
                 form.instance.identity_number = identity_number
                 tenant = form.save()
-                # بعد حفظ المستأجر
-                next_url = request.POST.get('next') or request.GET.get('next')
-            if next_url:
-                return redirect(next_url)
-                return redirect('add_contract')  # أو أي مسار تريده
-                request.session['new_tenant_id'] = tenant.id
-                return redirect('add_contract')
+                
+                # إذا كان هناك new_unit_id في الجلسة، نذهب إلى choose_tenant
+                if request.session.get('new_unit_id'):
+                    request.session['new_tenant_id'] = tenant.id
+                    return redirect('choose_tenant')
+                else:
+                    # إذا لم يكن هناك وحدة مرتبطة، نذهب إلى قائمة المستأجرين
+                    messages.success(request, _('تم إضافة المستأجر بنجاح.'))
+                    return redirect('tenant_list')
     else:
         form = TenantForm()
     return render(request, 'rentals/add_tenant.html', {'form': form})
@@ -910,16 +900,23 @@ def reports_dashboard(request):
 
 @login_required
 def rent_report(request):
-    """تقرير الإيجارات الشهري"""
+    report_type = request.GET.get('report_type', 'monthly')
     year = int(request.GET.get('year', datetime.now().year))
     month = int(request.GET.get('month', datetime.now().month))
     
-    start_date = date(year, month, 1)
-    if month == 12:
-        end_date = date(year+1, 1, 1) - timedelta(days=1)
+    if report_type == 'yearly':
+        start_date = date(year, 1, 1)
+        end_date = date(year, 12, 31)
+        period_name = f"السنة {year}"
     else:
-        end_date = date(year, month+1, 1) - timedelta(days=1)
+        start_date = date(year, month, 1)
+        if month == 12:
+            end_date = date(year+1, 1, 1) - timedelta(days=1)
+        else:
+            end_date = date(year, month+1, 1) - timedelta(days=1)
+        period_name = f"{get_month_name(month)} {year}"
     
+    # باقي الكود كما هو مع استخدام start_date و end_date
     payments = Payment.objects.filter(
         payment_date__gte=start_date,
         payment_date__lte=end_date
@@ -927,11 +924,10 @@ def rent_report(request):
     
     total_payments = payments.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
     
-    # حساب العقود النشطة يدوياً بدلاً من استخدام end_date في الفلتر
+    # حساب العقود النشطة يدوياً
     all_contracts = Contract.objects.filter(is_active=True)
     active_contracts = []
     for contract in all_contracts:
-        # حساب نهاية العقد يدوياً
         contract_end = contract.start_date + relativedelta(months=contract.lease_duration_months) - timedelta(days=1)
         if contract.start_date <= end_date and contract_end >= start_date:
             active_contracts.append(contract)
@@ -942,23 +938,21 @@ def rent_report(request):
         overlap_start = max(contract.start_date, start_date)
         overlap_end = min(contract_end, end_date)
         if overlap_start <= overlap_end:
-            expected_rent += contract.total_monthly_with_tax
-    
-    current_year = datetime.now().year
-    years = range(current_year - 5, current_year + 1)
-    months = range(1, 13)
+            months = (overlap_end.year - overlap_start.year) * 12 + (overlap_end.month - overlap_start.month) + 1
+            expected_rent += contract.total_monthly_with_tax * months
     
     context = {
+        'report_type': report_type,
         'year': year,
         'month': month,
-        'month_name': get_month_name(month),
+        'period_name': period_name,
         'payments': payments,
         'total_payments': total_payments,
         'expected_rent': expected_rent,
         'start_date': start_date,
         'end_date': end_date,
-        'years': years,
-        'months': months,
+        'years': range(datetime.now().year-5, datetime.now().year+1),
+        'months': range(1, 13),
     }
     return render(request, 'rentals/reports/rent_report.html', context)
 

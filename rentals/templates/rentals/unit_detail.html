@@ -36,34 +36,15 @@
             </div>
         </div>
 
-        {% if current_contract %}
-        <div class="col-md-6">
-            <div class="content-card">
-                <h5 class="mb-3">العقد الحالي</h5>
-                <p><strong>رقم العقد:</strong> {{ current_contract.contract_number }}</p>
-                <p><strong>المستأجر:</strong> {{ current_contract.tenant.name }}</p>
-                <p><strong>فترة العقد:</strong> {{ current_contract.start_date }} - {{ current_contract.end_date }}</p>
-                <p><strong>الإيجار الشهري:</strong> {{ current_contract.monthly_rent|floatformat:2 }}</p>
-                <p><strong>الضريبة:</strong> {{ current_contract.tax_amount_monthly|floatformat:2 }} ({{ current_contract.tax_rate }}%)</p>
-                <p><strong>الإجمالي مع الضريبة:</strong> {{ current_contract.total_monthly_with_tax|floatformat:2 }}</p>
-                <hr>
-                <p><strong>إجمالي المتوقع:</strong> {{ current_contract.total_expected|floatformat:2 }}</p>
-                <p><strong>إجمالي المدفوع:</strong> {{ current_contract.total_paid|floatformat:2 }}</p>
-                <p><strong>المتبقي:</strong> <span class="{% if current_contract.remaining > 0 %}text-danger{% else %}text-success{% endif %} fw-bold">{{ current_contract.remaining|floatformat:2 }}</span></p>
-            </div>
-        </div>
-        {% else %}
-        <div class="col-md-6">
-            <div class="content-card text-center">
-                <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
-                <h5>هذه الوحدة غير مؤجرة حالياً</h5>
-                <a href="{% url 'add_contract_for_unit' unit.id %}" class="btn btn-primary-custom mt-3">
-                    <i class="fas fa-plus-circle"></i> إضافة عقد جديد
-                </a>
-            </div>
-        </div>
-        {% endif %}
-    </div>
+       <td>
+    {% if unit.current_contract %}
+        {{ unit.current_contract.rent_amount|floatformat:2 }} 
+        {% if unit.current_contract.rent_type == 'yearly' %}ريال/سنة{% else %}ريال/شهر{% endif %}
+        (إجمالي العقد: {{ unit.current_contract.total_expected|floatformat:2 }})
+    {% else %}
+        -
+    {% endif %}
+</td>
 
     <!-- سجل الدفعات -->
     {% if current_contract %}
