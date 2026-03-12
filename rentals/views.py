@@ -129,6 +129,8 @@ def register_view(request):
 def home(request):
     current_year = datetime.now().year
     current_month = datetime.now().month
+    today = date.today()
+    end_of_year = date(current_year, 12, 31)  # نهاية السنة الحالية
 
     # إحصائيات عامة
     total_categories = MainCategory.objects.count()
@@ -137,18 +139,20 @@ def home(request):
     
     contracts = Contract.objects.filter(is_active=True)
     
-    # حساب الإيرادات المتوقعة للسنة الحالية فقط
+    # ===== المستحق حتى نهاية السنة =====
     total_expected = 0
     for contract in contracts:
-        total_expected += expected_rent_for_year(contract, current_year)
+        total_expected += total_rent_due_up_to_date(contract, end_of_year)
     
-    # إجمالي المدفوعات (كل الدفعات المسجلة)
+    # ===== المستحق حتى اليوم (للمتبقي) =====
+    total_rent_due_today = 0
+    for contract in contracts:
+        total_rent_due_today += total_rent_due_up_to_date(contract, today)
+    
     total_paid = Payment.objects.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
+    total_remaining = total_rent_due_today - total_paid
     
-    # المتبقي = المتوقع - المدفوع
-    total_remaining = total_expected - total_paid
-    
-    # الضريبة
+    # الضريبة (كما هي)
     total_tax_due = 0
     total_tax_collected = 0
     quarters = []
@@ -162,13 +166,10 @@ def home(request):
         total_tax_due += tax_data['due']
         total_tax_collected += tax_data['collected']
     
-    # حساب إجمالي الضريبة المستردة من المصاريف
     expenses_refundable = Expense.objects.filter(tax_refundable=True)
     total_tax_refunded = 0
     for exp in expenses_refundable:
         total_tax_refunded += exp.tax_amount
-
-    # صافي الضريبة
     net_tax = total_tax_due - total_tax_refunded
         
     # بيانات الأقسام الفرعية
@@ -179,13 +180,19 @@ def home(request):
         rented_count = sub.units.filter(is_rented=True).count()
         contracts_sub = Contract.objects.filter(unit__sub_category=sub, is_active=True)
         
-        # الإيرادات المتوقعة للسنة الحالية لكل قسم
-        total_rent_expected = sum(expected_rent_for_year(c, current_year) for c in contracts_sub)
+        # المستحق حتى نهاية السنة لهذا القسم
+        expected_sub = 0
+        for contract in contracts_sub:
+            expected_sub += total_rent_due_up_to_date(contract, end_of_year)
         
+        # المستحق حتى اليوم لهذا القسم
+        due_today_sub = 0
+        for contract in contracts_sub:
+            due_today_sub += total_rent_due_up_to_date(contract, today)
+        
+        paid_sub = Payment.objects.filter(contract__unit__sub_category=sub).aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
         total_expense = sub.total_expenses()
         refundable_tax = sub.total_refundable_tax()
-        total_paid_sub = Payment.objects.filter(contract__unit__sub_category=sub).aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
-        total_remaining_sub = total_rent_expected - total_paid_sub
         
         subcategories_data.append({
             'id': sub.id,
@@ -193,14 +200,14 @@ def home(request):
             'main_category': sub.main_category.name,
             'units_count': units_count,
             'rented_count': rented_count,
-            'total_rent_expected': total_rent_expected,
+            'total_rent_expected': expected_sub,          # المستحق حتى نهاية السنة
             'total_expense': total_expense,
             'refundable_tax': refundable_tax,
-            'total_paid': total_paid_sub,          
-            'total_remaining': total_remaining_sub,
+            'total_paid': paid_sub,          
+            'total_remaining': due_today_sub - paid_sub,  # المتبقي حتى اليوم
         })
     
-    # بيانات الرسوم البيانية
+    # باقي الكود (الرسوم البيانية) كما هو...
     monthly_labels = []
     monthly_income = []
     for i in range(5, -1, -1):
@@ -268,11 +275,6 @@ def home(request):
         'net_tax': net_tax,
     }
     return render(request, 'rentals/home.html', context)
-
-@login_required
-def main_categories(request):
-    categories = MainCategory.objects.all()
-    return render(request, 'rentals/main_categories.html', {'categories': categories})
 
 @login_required
 def main_category_detail(request, pk):
@@ -469,6 +471,48 @@ def add_contract(request):
         form = ContractForm()
     
     return render(request, 'rentals/add_contract.html', {'form': form, 'unit': unit, 'tenant': tenant})
+
+def total_rent_due_up_to_date(contract, end_date):
+    """
+    حساب إجمالي الإيجار المستحق (شامل الضريبة) للعقد حتى تاريخ end_date.
+    يتم ذلك عن طريق جمع قيم جميع الدفعات التي تاريخ استحقاقها <= end_date.
+    """
+    due_dates = get_payment_dates(contract, end_limit=end_date)
+    if not due_dates:
+        return 0
+    interval_map = {'monthly': 1, 'quarterly': 3, 'half_yearly': 6, 'yearly': 12}
+    months_per_payment = interval_map.get(contract.payment_interval, 1)
+    rent_per_payment = contract.total_monthly_with_tax * months_per_payment
+    return rent_per_payment * len(due_dates)
+
+def get_payment_dates(contract, start_limit=None, end_limit=None):
+    """
+    توليد تواريخ الاستحقاق الفعلية للعقد ضمن نطاق تاريخي محدد.
+    """
+    effective_start = contract.start_date + timedelta(days=contract.grace_period_days)
+    contract_end = contract.start_date + relativedelta(months=contract.lease_duration_months) - timedelta(days=1)
+    interval_map = {'monthly': 1, 'quarterly': 3, 'half_yearly': 6, 'yearly': 12}
+    interval = interval_map.get(contract.payment_interval, 1)
+    
+    dates = []
+    current = effective_start
+    while current <= contract_end:
+        if (start_limit is None or current >= start_limit) and (end_limit is None or current <= end_limit):
+            dates.append(current)
+        current += relativedelta(months=interval)
+    return dates
+
+def total_rent_due_up_to_date(contract, end_date):
+    """
+    حساب إجمالي الإيجار المستحق (شامل الضريبة) حتى تاريخ معين (end_date).
+    """
+    due_dates = get_payment_dates(contract, end_limit=end_date)
+    if not due_dates:
+        return 0
+    interval_map = {'monthly': 1, 'quarterly': 3, 'half_yearly': 6, 'yearly': 12}
+    months_per_payment = interval_map.get(contract.payment_interval, 1)
+    rent_per_payment = contract.total_monthly_with_tax * months_per_payment
+    return rent_per_payment * len(due_dates)
 
 def expected_rent_for_year(contract, year):
     """
