@@ -92,11 +92,18 @@
                                 <span class="badge badge-warning-custom">شاغرة</span>
                             {% endif %}
                         </td>
-                        <td>
+                        <td><td>
     {% if unit.current_contract %}
-        {{ unit.current_contract.rent_amount|floatformat:2 }} 
-        {% if unit.current_contract.rent_type == 'yearly' %}ريال/سنة{% else %}ريال/شهر{% endif %}
-        <br><small>إجمالي العقد: {{ unit.current_contract.total_expected|floatformat:2 }}</small>
+        <div>
+            <strong>{{ unit.current_contract.rent_amount|floatformat:2 }}</strong>
+            {% if unit.current_contract.rent_type == 'yearly' %}
+                <span class="badge bg-info">سنوي</span>
+            {% else %}
+                <span class="badge bg-secondary">شهري</span>
+            {% endif %}
+            <br>
+            <small class="text-muted">الإجمالي: {{ unit.current_contract.total_expected|floatformat:2 }}</small>
+        </div>
     {% else %}
         -
     {% endif %}

@@ -4,6 +4,20 @@
 {% block title %}{% trans "تقرير الضريبة" %}{% endblock %}
 
 {% block content %}
+
+<div class="mb-3">
+    <label class="form-label">نوع التقرير</label>
+    <div>
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="report_type" id="monthly" value="monthly" {% if report_type != 'yearly' %}checked{% endif %}>
+            <label class="form-check-label" for="monthly">شهري</label>
+        </div>
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="report_type" id="yearly" value="yearly" {% if report_type == 'yearly' %}checked{% endif %}>
+            <label class="form-check-label" for="yearly">سنوي</label>
+        </div>
+    </div>
+</div>
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2>{% trans "تقرير الضريبة" %} - {{ period_name }}</h2>
     <a href="{% url 'reports_dashboard' %}" class="btn btn-outline-secondary">

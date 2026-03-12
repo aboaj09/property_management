@@ -390,11 +390,11 @@ def add_unit(request, subcategory_id):
             unit.save()
             messages.success(request, _('تم إضافة الوحدة بنجاح.'))
             request.session['new_unit_id'] = unit.id
-            return redirect('choose_tenant')  # بدلاً من add_tenant
+            # التوجيه إلى صفحة اختيار المستأجر بدلاً من add_tenant
+            return redirect('choose_tenant')
     else:
         form = UnitForm()
     return render(request, 'rentals/add_unit.html', {'form': form, 'subcategory': subcategory})
-
 @login_required
 @permission_required('rentals.add_tenant', raise_exception=True)
 def add_tenant(request):
@@ -402,17 +402,21 @@ def add_tenant(request):
         form = TenantForm(request.POST, request.FILES)
         if form.is_valid():
             identity_number = normalize_arabic_numbers(form.cleaned_data['identity_number'])
+            
             if Tenant.objects.filter(identity_number=identity_number, is_deleted=False).exists():
-                messages.error(request, _('رقم الهوية مستخدم مسبقاً.'))
+                messages.error(request, _('رقم الهوية مستخدم مسبقاً من قبل مستأجر نشط.'))
                 return render(request, 'rentals/add_tenant.html', {'form': form})
             else:
                 form.instance.identity_number = identity_number
                 tenant = form.save()
+                
+                # إذا كان هناك new_unit_id في الجلسة، نذهب إلى choose_tenant
                 if request.session.get('new_unit_id'):
                     request.session['new_tenant_id'] = tenant.id
                     return redirect('choose_tenant')
                 else:
-                    messages.success(request, 'تم إضافة المستأجر بنجاح.')
+                    # إذا لم يكن هناك وحدة مرتبطة، نذهب إلى قائمة المستأجرين
+                    messages.success(request, _('تم إضافة المستأجر بنجاح.'))
                     return redirect('tenant_list')
     else:
         form = TenantForm()
@@ -920,12 +924,17 @@ def rent_report(request):
             end_date = date(year, month+1, 1) - timedelta(days=1)
         period_name = f"{get_month_name(month)} {year}"
     
-    # ... باقي الكود كما هو مع استخدام start_date و end_date ...
-    payments = Payment.objects.filter(payment_date__gte=start_date, payment_date__lte=end_date)
+    payments = Payment.objects.filter(
+        payment_date__gte=start_date,
+        payment_date__lte=end_date
+    ).select_related('contract__unit', 'contract__tenant')
+    
     total_payments = payments.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
     
+    # حساب العقود النشطة يدوياً
     all_contracts = Contract.objects.filter(is_active=True)
     expected_rent = 0
+    
     for contract in all_contracts:
         contract_end = contract.start_date + relativedelta(months=contract.lease_duration_months) - timedelta(days=1)
         if contract.start_date <= end_date and contract_end >= start_date:
@@ -933,6 +942,10 @@ def rent_report(request):
             overlap_end = min(contract_end, end_date)
             months = (overlap_end.year - overlap_start.year) * 12 + (overlap_end.month - overlap_start.month) + 1
             expected_rent += contract.total_monthly_with_tax * months
+    
+    current_year = datetime.now().year
+    years = range(current_year - 5, current_year + 1)
+    months = range(1, 13)
     
     context = {
         'report_type': report_type,
@@ -944,8 +957,8 @@ def rent_report(request):
         'expected_rent': expected_rent,
         'start_date': start_date,
         'end_date': end_date,
-        'years': range(datetime.now().year-5, datetime.now().year+1),
-        'months': range(1, 13),
+        'years': years,
+        'months': months,
     }
     return render(request, 'rentals/reports/rent_report.html', context)
 
@@ -955,15 +968,21 @@ def rent_report(request):
 
 @login_required
 def expense_report(request):
-    """تقرير المصاريف الشهري"""
+    report_type = request.GET.get('report_type', 'monthly')
     year = int(request.GET.get('year', datetime.now().year))
     month = int(request.GET.get('month', datetime.now().month))
     
-    start_date = date(year, month, 1)
-    if month == 12:
-        end_date = date(year+1, 1, 1) - timedelta(days=1)
+    if report_type == 'yearly':
+        start_date = date(year, 1, 1)
+        end_date = date(year, 12, 31)
+        period_name = f"السنة {year}"
     else:
-        end_date = date(year, month+1, 1) - timedelta(days=1)
+        start_date = date(year, month, 1)
+        if month == 12:
+            end_date = date(year+1, 1, 1) - timedelta(days=1)
+        else:
+            end_date = date(year, month+1, 1) - timedelta(days=1)
+        period_name = f"{get_month_name(month)} {year}"
     
     expenses = Expense.objects.filter(
         date__gte=start_date,
@@ -971,25 +990,20 @@ def expense_report(request):
     ).select_related('sub_category')
     
     total_expense = expenses.aggregate(Sum('amount'))['amount__sum'] or 0
-    total_refundable_tax = 0
-    for exp in expenses.filter(tax_refundable=True):
-        total_refundable_tax += exp.tax_amount
-    
-    current_year = datetime.now().year
-    years = range(current_year - 5, current_year + 1)
-    months = range(1, 13)
+    total_refundable_tax = sum(exp.tax_amount for exp in expenses if exp.tax_refundable)
     
     context = {
+        'report_type': report_type,
         'year': year,
         'month': month,
-        'month_name': get_month_name(month),
+        'period_name': period_name,
         'expenses': expenses,
         'total_expense': total_expense,
         'total_refundable_tax': total_refundable_tax,
         'start_date': start_date,
         'end_date': end_date,
-        'years': years,
-        'months': months,
+        'years': range(datetime.now().year-5, datetime.now().year+1),
+        'months': range(1, 13),
     }
     return render(request, 'rentals/reports/expense_report.html', context)
 
