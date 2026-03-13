@@ -110,14 +110,13 @@ def get_quarter_tax(year, quarter):
     all_contracts = Contract.objects.filter(is_active=True)
     tax_due = 0
     for contract in all_contracts:
-        effective_start = contract.start_date + timedelta(days=contract.grace_period_days)
-        contract_end = contract.start_date + relativedelta(months=contract.lease_duration_months) - timedelta(days=1)
-        if effective_start > end_date or contract_end < start_date:
-            continue
-        overlap_start = max(effective_start, start_date)
-        overlap_end = min(contract_end, end_date)
-        months = (overlap_end.year - overlap_start.year) * 12 + (overlap_end.month - overlap_start.month) + 1
-        tax_due += contract.tax_amount_monthly * months
+        # توليد تواريخ الاستحقاق الفعلية للعقد ضمن هذا الربع
+        due_dates = get_payment_dates(contract, start_limit=start_date, end_limit=end_date)
+        if due_dates:
+            interval_map = {'monthly': 1, 'quarterly': 3, 'half_yearly': 6, 'yearly': 12}
+            months_per_payment = interval_map.get(contract.payment_interval, 1)
+            tax_per_payment = contract.tax_amount_monthly * months_per_payment
+            tax_due += tax_per_payment * len(due_dates)
     payments = Payment.objects.filter(payment_date__gte=start_date, payment_date__lte=end_date)
     tax_collected = 0
     for payment in payments:
