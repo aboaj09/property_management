@@ -118,7 +118,8 @@ def get_quarter_tax(year, quarter):
     for contract in all_contracts:
         # احصل على تواريخ الاستحقاق الفعلية التي تقع ضمن الربع
         due_dates = get_payment_dates(contract, start_limit=start_date, end_limit=end_date)
-        if due_dates:
+        if due_dates: 
+            print(f"Contract {contract.id}: due_dates = {due_dates}")
             # عدد أشهر الدورة
             interval_map = {'monthly': 1, 'quarterly': 3, 'half_yearly': 6, 'yearly': 12}
             months_per_payment = interval_map.get(contract.payment_interval, 1)
