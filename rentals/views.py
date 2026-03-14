@@ -107,21 +107,34 @@ def get_quarter_tax(year, quarter):
     start_date, end_date = get_quarter_dates(year, quarter)
     if not start_date:
         return {'due': 0, 'collected': 0}
+
     all_contracts = Contract.objects.filter(is_active=True)
     tax_due = 0
+    tax_due_details = []  # اختياري للتتبع
+
     for contract in all_contracts:
-        # توليد تواريخ الاستحقاق الفعلية للعقد ضمن هذا الربع
+        # توليد تواريخ الاستحقاق الفعلية لهذا العقد ضمن الربع
         due_dates = get_payment_dates(contract, start_limit=start_date, end_limit=end_date)
         if due_dates:
             interval_map = {'monthly': 1, 'quarterly': 3, 'half_yearly': 6, 'yearly': 12}
             months_per_payment = interval_map.get(contract.payment_interval, 1)
             tax_per_payment = contract.tax_amount_monthly * months_per_payment
             tax_due += tax_per_payment * len(due_dates)
+            # للتأكد يمكنك إضافة تفاصيل (اختياري)
+            for d in due_dates:
+                tax_due_details.append({
+                    'contract': contract.contract_number,
+                    'date': d,
+                    'amount': tax_per_payment
+                })
+
+    # الضريبة المحصلة من الدفعات الفعلية
     payments = Payment.objects.filter(payment_date__gte=start_date, payment_date__lte=end_date)
     tax_collected = 0
     for payment in payments:
         if payment.contract.has_tax:
             tax_collected += payment.amount_paid * (payment.contract.tax_rate / 100) / (1 + payment.contract.tax_rate/100)
+
     return {'due': round(tax_due, 2), 'collected': round(tax_collected, 2)}
 
 # ============================================================
