@@ -104,6 +104,10 @@ def get_quarter_dates(year, quarter):
     return start_date.date(), end_date.date()
 
 def get_quarter_tax(year, quarter):
+    """
+    تحسب الضريبة المستحقة والمحصلة لربع سنة محدد.
+    الضريبة المستحقة تعتمد فقط على تواريخ الاستحقاق الفعلية للعقود النشطة.
+    """
     start_date, end_date = get_quarter_dates(year, quarter)
     if not start_date:
         return {'due': 0, 'collected': 0}
@@ -112,19 +116,23 @@ def get_quarter_tax(year, quarter):
     tax_due = 0
 
     for contract in all_contracts:
-        # توليد تواريخ الاستحقاق الفعلية للعقد ضمن هذا الربع
+        # احصل على تواريخ الاستحقاق الفعلية التي تقع ضمن الربع
         due_dates = get_payment_dates(contract, start_limit=start_date, end_limit=end_date)
         if due_dates:
+            # عدد أشهر الدورة
             interval_map = {'monthly': 1, 'quarterly': 3, 'half_yearly': 6, 'yearly': 12}
             months_per_payment = interval_map.get(contract.payment_interval, 1)
+            # الضريبة لكل دفعة = (الضريبة الشهرية * عدد أشهر الدورة)
             tax_per_payment = contract.tax_amount_monthly * months_per_payment
+            # أضف الضريبة لكل دفعة في هذا الربع
             tax_due += tax_per_payment * len(due_dates)
 
-    # الضريبة المحصلة من الدفعات الفعلية
+    # الضريبة المحصلة: من الدفعات المسجلة فعلياً في هذا الربع
     payments = Payment.objects.filter(payment_date__gte=start_date, payment_date__lte=end_date)
     tax_collected = 0
     for payment in payments:
         if payment.contract.has_tax:
+            # استخراج الضريبة من المبلغ المدفوع (نفترض أن المبلغ شامل الضريبة)
             tax_collected += payment.amount_paid * (payment.contract.tax_rate / 100) / (1 + payment.contract.tax_rate/100)
 
     return {'due': round(tax_due, 2), 'collected': round(tax_collected, 2)}
