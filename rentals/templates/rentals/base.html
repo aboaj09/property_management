@@ -33,7 +33,7 @@
             top: 0;
             left: 0;
             right: 0;
-            z-index: 1030; /* أعلى من القائمة الجانبية */
+            z-index: 1030;
             height: 70px;
         }
         .navbar-custom .navbar-brand {
@@ -43,15 +43,26 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            margin-right: 70px; /* إزاحة لليمين لعدم التداخل مع زر القائمة */
         }
         .navbar-custom .navbar-brand i {
             font-size: 2rem;
+        }
+        /* أزرار اللغة (في الزاوية اليسرى) */
+        .language-switcher {
+            position: fixed;
+            top: 15px;
+            left: 15px; /* للوضع RTL يصبح اليسار هو اليمين تلقائيًا */
+            z-index: 1040;
+            display: flex;
+            gap: 5px;
         }
         .language-switcher .btn {
             border-radius: 20px;
             padding: 4px 12px;
             font-size: 0.9rem;
             font-weight: 600;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
         .language-switcher .btn-light {
             background: white;
@@ -64,7 +75,7 @@
         /* القائمة الجانبية */
         .sidebar {
             position: fixed;
-            top: 70px; /* تبدأ من أسفل الشريط العلوي */
+            top: 70px;
             right: 0;
             bottom: 0;
             width: 280px;
@@ -73,7 +84,7 @@
             padding: 20px;
             overflow-y: auto;
             transition: 0.3s;
-            z-index: 1020; /* أقل من الشريط العلوي */
+            z-index: 1020;
         }
         .sidebar .user-info {
             text-align: center;
@@ -160,8 +171,8 @@
         }
         /* المحتوى الرئيسي */
         .main-content {
-            margin-right: 300px; /* مساحة للقائمة الجانبية + هامش */
-            margin-top: 90px; /* مساحة للشريط العلوي + هامش */
+            margin-right: 300px;
+            margin-top: 90px;
             padding: 20px;
             min-height: 100vh;
             transition: margin-right 0.3s;
@@ -179,7 +190,7 @@
             position: fixed;
             top: 15px;
             right: 15px;
-            z-index: 1050; /* أعلى من كل شيء */
+            z-index: 1050;
             background: #2563eb;
             color: white;
             border: none;
@@ -190,7 +201,7 @@
         }
         @media (max-width: 992px) {
             .sidebar {
-                right: -300px; /* مخفية خارج الشاشة */
+                right: -300px;
             }
             .sidebar.active {
                 right: 0;
@@ -201,8 +212,11 @@
             .menu-toggle {
                 display: block;
             }
+            .navbar-custom .navbar-brand {
+                margin-right: 0; /* في الشاشات الصغيرة، لا حاجة للإزاحة */
+            }
         }
-        /* كروت الإحصائيات (إذا كانت موجودة) */
+        /* كروت الإحصائيات */
         .stat-card {
             background: white;
             border-radius: 20px;
@@ -327,6 +341,16 @@
         <i class="fas fa-bars"></i>
     </button>
 
+    <!-- أزرار اللغة (في الزاوية اليسرى) -->
+    <div class="language-switcher">
+        <form action="{% url 'set_language' %}" method="post" class="d-inline">
+            {% csrf_token %}
+            <input name="next" type="hidden" value="{{ request.path }}">
+            <button type="submit" name="language" value="ar" class="btn btn-sm btn-light">AR</button>
+            <button type="submit" name="language" value="en" class="btn btn-sm btn-outline-light">EN</button>
+        </form>
+    </div>
+
     <!-- الشريط العلوي -->
     <nav class="navbar navbar-custom">
         <div class="container-fluid px-4">
@@ -334,14 +358,6 @@
                 <i class="fas fa-building"></i>
                 مكتب عمار المدينة العقاري
             </a>
-            <div class="language-switcher">
-                <form action="{% url 'set_language' %}" method="post" class="d-inline">
-                    {% csrf_token %}
-                    <input name="next" type="hidden" value="{{ request.path }}">
-                    <button type="submit" name="language" value="ar" class="btn btn-sm btn-light">AR</button>
-                    <button type="submit" name="language" value="en" class="btn btn-sm btn-outline-light">EN</button>
-                </form>
-            </div>
         </div>
     </nav>
 
